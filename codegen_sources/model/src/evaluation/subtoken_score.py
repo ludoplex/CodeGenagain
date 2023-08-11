@@ -45,16 +45,15 @@ def run_subtoken_score(ref, hyp, subtoken_average=False, all_beams=False):
         assert not subtoken_average
     for h in hyp:
         assert os.path.isfile(h), f"file {h} does not exist"
-    assert os.path.isfile(ref) or os.path.isfile(ref + "0")
+    assert os.path.isfile(ref) or os.path.isfile(f"{ref}0")
     refs = read_file_lines(ref)
     hyps = list(zip(*[read_file_lines(path) for path in hyp]))
     if subtoken_average:
         return subtoken_score_on_lines_subtoken_level([h[0] for h in hyps], refs)
-    else:
-        if not all_beams:
-            hyps = [[h[0]] for h in hyps]
-        assert len(hyps) == len(refs)
-        return subtoken_score_on_lines(hyps, refs)
+    if not all_beams:
+        hyps = [[h[0]] for h in hyps]
+    assert len(hyps) == len(refs)
+    return subtoken_score_on_lines(hyps, refs)
 
 
 def subtoken_score_on_lines(

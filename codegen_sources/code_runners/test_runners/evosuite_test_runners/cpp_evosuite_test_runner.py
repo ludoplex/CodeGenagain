@@ -84,7 +84,7 @@ class CppEvosuiteTestRunner(UnitTestRunner):
         ):
             raise TestRuntimeError("\n".join(res_line))
         nb_tests_lines = [l for l in res_line if l.startswith(NB_TESTS_STRING)]
-        assert len(nb_tests_lines) > 0
+        assert nb_tests_lines
         nb_tests_line = nb_tests_lines[-1]
         number_of_tests = int(
             nb_tests_line.replace(NB_TESTS_STRING, "").split(" ")[0].strip()
@@ -92,7 +92,6 @@ class CppEvosuiteTestRunner(UnitTestRunner):
         res_last_line = res_line[-1]
         if res_last_line.startswith(PASSED_STRING):
             return "success", number_of_tests, 0
-        else:
-            assert FAILED_STRING in res_last_line
-            number_failures = int(res_last_line.split()[0])
-            return "failure", number_of_tests, number_failures
+        assert FAILED_STRING in res_last_line
+        number_failures = int(res_last_line.split()[0])
+        return "failure", number_of_tests, number_failures

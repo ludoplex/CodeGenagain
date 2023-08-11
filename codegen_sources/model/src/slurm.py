@@ -18,7 +18,7 @@ logger = getLogger()
 
 
 def sig_handler(signum, frame):
-    logger.warning("Signal handler called with signal " + str(signum))
+    logger.warning(f"Signal handler called with signal {str(signum)}")
     prod_id = int(os.environ["SLURM_PROCID"])
     logger.warning("Host: %s - Global rank: %i" % (socket.gethostname(), prod_id))
     if prod_id == 0:
@@ -30,7 +30,7 @@ def sig_handler(signum, frame):
 
 
 def term_handler(signum, frame):
-    logger.warning("Signal handler called with signal " + str(signum))
+    logger.warning(f"Signal handler called with signal {str(signum)}")
     logger.warning("Bypassing SIGTERM.")
 
 
@@ -54,7 +54,7 @@ def init_distributed_mode(params):
         - world_size
     """
     params.is_slurm_job = "SLURM_JOB_ID" in os.environ and not params.debug_slurm
-    print("SLURM job: %s" % str(params.is_slurm_job))
+    print(f"SLURM job: {params.is_slurm_job}")
 
     # SLURM job
     if params.is_slurm_job:
@@ -78,7 +78,7 @@ def init_distributed_mode(params):
         PREFIX = "%i - " % int(os.environ["SLURM_PROCID"])
         for name in SLURM_VARIABLES:
             value = os.environ.get(name, None)
-            print(PREFIX + "%s: %s" % (name, str(value)))
+            print(f"{PREFIX}{name}: {str(value)}")
 
         # # job ID
         # params.job_id = os.environ['SLURM_JOB_ID']
@@ -101,7 +101,7 @@ def init_distributed_mode(params):
         )
         params.master_addr = hostnames.split()[0].decode("utf-8")
         assert 10001 <= params.master_port <= 20000 or params.world_size == 1
-        print(PREFIX + "Master address: %s" % params.master_addr)
+        print(f"{PREFIX}Master address: {params.master_addr}")
         print(PREFIX + "Master port   : %i" % params.master_port)
 
         # set environment variables for 'env://'
@@ -110,7 +110,6 @@ def init_distributed_mode(params):
         os.environ["WORLD_SIZE"] = str(params.world_size)
         os.environ["RANK"] = str(params.global_rank)
 
-    # multi-GPU job (local or multi-node) - jobs started with torch.distributed.launch
     elif params.local_rank != -1:
 
         assert params.master_port == -1
@@ -124,7 +123,6 @@ def init_distributed_mode(params):
         params.n_nodes = params.world_size // params.n_gpu_per_node
         params.node_id = params.global_rank // params.n_gpu_per_node
 
-    # local job (single GPU)
     else:
         assert params.local_rank == -1
         assert params.master_port == -1
@@ -154,10 +152,10 @@ def init_distributed_mode(params):
     print(PREFIX + "Global rank    : %i" % params.global_rank)
     print(PREFIX + "World size     : %i" % params.world_size)
     print(PREFIX + "GPUs per node  : %i" % params.n_gpu_per_node)
-    print(PREFIX + "Master         : %s" % str(params.is_master))
-    print(PREFIX + "Multi-node     : %s" % str(params.multi_node))
-    print(PREFIX + "Multi-GPU      : %s" % str(params.multi_gpu))
-    print(PREFIX + "Hostname       : %s" % socket.gethostname())
+    print(f"{PREFIX}Master         : {params.is_master}")
+    print(f"{PREFIX}Multi-node     : {params.multi_node}")
+    print(f"{PREFIX}Multi-GPU      : {params.multi_gpu}")
+    print(f"{PREFIX}Hostname       : {socket.gethostname()}")
 
     # set GPU device
     torch.cuda.set_device(params.local_rank)

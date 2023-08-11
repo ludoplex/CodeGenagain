@@ -67,7 +67,7 @@ class SentenceEmbedder(object):
         Wrapper on top of the different sentence embedders.
         Returns sequence-wise or single-vector sentence representations.
         """
-        self.pretrain_params = {k: v for k, v in pretrain_params.__dict__.items()}
+        self.pretrain_params = dict(pretrain_params.__dict__.items())
         self.model = model
         self.dico = dico
         self.n_layers = model.n_layers
@@ -122,11 +122,13 @@ class SentenceEmbedder(object):
             parameters += self.model.layer_norm1[l].parameters()
             parameters += self.model.ffns[l].parameters()
             parameters += self.model.layer_norm2[l].parameters()
-            logger.info("Adding layer-%s parameters to optimizer" % (l + 1))
+            logger.info(f"Adding layer-{l + 1} parameters to optimizer")
 
         logger.info(
-            "Optimizing on %i Transformer elements."
-            % sum([p.nelement() for p in parameters])
+            (
+                "Optimizing on %i Transformer elements."
+                % sum(p.nelement() for p in parameters)
+            )
         )
 
         return parameters

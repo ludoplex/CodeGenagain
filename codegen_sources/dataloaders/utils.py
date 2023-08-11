@@ -52,7 +52,7 @@ class Batch:
                 val = val.unsqueeze(0)
                 setattr(self, name, val)
             # fill in sequence length
-            key = name + "_len"
+            key = f"{name}_len"
             if not getattr(self, key).numel():
                 setattr(self, key, torch.LongTensor([val.shape[1]]))
         if not isinstance(self._ids, np.ndarray):
@@ -85,7 +85,7 @@ class Batch:
         out: tp.Dict[str, tp.Any] = {}
         for name in ["x", "y"]:
             # concat lengths
-            key = name + "_len"
+            key = f"{name}_len"
             data = [getattr(mf, key) for mf in batches]
             out[key] = torch.cat(data, dim=0)  # type: ignore
             # pad and concatenate data
@@ -273,7 +273,7 @@ class DelayedReader:
             return
         if self._reader == "file":
             self._code = Path(self._value).read_text("utf8")
-            self._id = "filepath:" + str(self._value)
+            self._id = f"filepath:{str(self._value)}"
             return
         if self._reader == "json_string":
             data = json.loads(self._value)
@@ -462,8 +462,7 @@ class Modulo:
         return f"{name}(index={self.index}, mod={self.mod})"
 
     def __call__(self, ind: int) -> bool:
-        out = ind % self.mod == self.index
-        return out
+        return ind % self.mod == self.index
 
     def __mul__(self: M, other: M) -> M:
         mod = self.mod * other.mod

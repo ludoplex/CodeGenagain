@@ -858,11 +858,7 @@ def main(params):
         encoder, decoder = build_model(params, data["dico"])
     print_memory(logger, "before build classifier")
 
-    if params.use_classifier:
-        classifier = build_classifier(params)
-    else:
-        classifier = None
-
+    classifier = build_classifier(params) if params.use_classifier else None
     # build trainer, reload potential checkpoints / build evaluator
     if params.encoder_only:
         trainer = SingleTrainer(model, data, params, classifier)
@@ -879,12 +875,12 @@ def main(params):
         scores = evaluator.run_all_evals(trainer)
         for k, v in scores.items():
             if isinstance(v, list):
-                logger.info("%s -> %s" % (k, json.dumps(["%.2f" % el for el in v])))
+                logger.info(f'{k} -> {json.dumps(["%.2f" % el for el in v])}')
             else:
                 logger.info("%s -> %.6f" % (k, v))
-        logger.info("__log__:%s" % json.dumps(scores))
-        if params.eval_only:
-            exit()
+        logger.info(f"__log__:{json.dumps(scores)}")
+    if params.eval_only:
+        exit()
 
     # set sampling probabilities for training
     set_sampling_probs(data, params)
@@ -897,7 +893,7 @@ def main(params):
         trainer.n_sentences = 0
 
         while trainer.n_sentences < trainer.epoch_size:
-            show_example = True if trainer.n_sentences == 0 else False
+            show_example = trainer.n_sentences == 0
 
             # CLM steps
             for lang1, lang2 in shuf_order(params.clm_steps, params):
@@ -986,11 +982,11 @@ def main(params):
             # print / JSON log
             for k, v in scores.items():
                 if isinstance(v, list):
-                    logger.info("%s -> %s" % (k, json.dumps(["%.2f" % el for el in v])))
+                    logger.info(f'{k} -> {json.dumps(["%.2f" % el for el in v])}')
                 else:
                     logger.info("%s -> %.6f" % (k, v))
             if params.is_master:
-                logger.info("__log__:%s" % json.dumps(scores))
+                logger.info(f"__log__:{json.dumps(scores)}")
 
         # end of epoch
         if params.validation_metrics != "":

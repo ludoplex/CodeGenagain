@@ -220,11 +220,7 @@ class Translator:
                     beam_size=beam_size,
                 )
 
-            # Convert out ids to text
-            tok = []
-            for i in range(x2.shape[1]):
-                tok.append(out_pipe.revert(x2[:, i]))
-            return tok
+            return [out_pipe.revert(x2[:, i]) for i in range(x2.shape[1])]
 
 
 if __name__ == "__main__":

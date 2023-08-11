@@ -78,7 +78,7 @@ class InputOutputEvaluator(CodeRunner):
         self._clean(tmp_path)
         num_failures = len([res for res in results if not res.startswith("success")])
 
-        if len([r for r in results if r.startswith("runtime")]) > 0:
+        if [r for r in results if r.startswith("runtime")]:
             short_result = [r for r in results if r.startswith("runtime")][0]
         elif len([r for r in results if r.startswith("failure")]) > 0:
             short_result = [r for r in results if r.startswith("failure")][0]
@@ -99,11 +99,11 @@ class InputOutputEvaluator(CodeRunner):
         actual = out.strip()
         if actual == output.strip():
             return "success"
+        if ret_code == 0:
+            return f"failure: actual {actual} vs expected {output.strip()}"
+
         else:
-            if ret_code != 0:
-                return f"runtime: {err.decode('utf8')}"
-            else:
-                return f"failure: actual {actual} vs expected {output.strip()}"
+            return f"runtime: {err.decode('utf8')}"
 
     @staticmethod
     def _process(code: str):

@@ -119,8 +119,8 @@ class Deobfuscator:
         obfuscator = lang_processor.obfuscate_code
         tokenizer = lang_processor.tokenize_code
 
-        lang1 = lang + "_obfuscated"
-        lang2 = lang + "_dictionary"
+        lang1 = f"{lang}_obfuscated"
+        lang2 = f"{lang}_dictionary"
         lang1_id = self.reloaded_params.lang2id[lang1]
         lang2_id = self.reloaded_params.lang2id[lang2]
 
@@ -140,7 +140,7 @@ class Deobfuscator:
 
         with torch.no_grad():
             # Convert source code to ids
-            tokens = [t for t in tokenizer(input)]
+            tokens = list(tokenizer(input))
             print(f"Tokenized {lang} function:")
             print(tokens)
             tokens = self.bpe_model.apply_bpe(" ".join(tokens))
@@ -202,10 +202,7 @@ class Deobfuscator:
                     tok.append(restore_roberta_segmentation_sentence(" ".join(wid)))
                 else:
                     tok.append(" ".join(wid).replace("@@ ", ""))
-            results = []
-            for t in tok:
-                results.append(t)
-            return results
+            return list(tok)
 
 
 if __name__ == "__main__":

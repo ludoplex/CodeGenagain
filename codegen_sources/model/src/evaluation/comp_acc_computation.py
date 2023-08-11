@@ -36,7 +36,7 @@ GFG = "GfG"
 CODE_NET = "CodeNet"
 
 sys.path.append(str(REPO_ROOT))
-print("adding to path", str(REPO_ROOT))
+print("adding to path", REPO_ROOT)
 from codegen_sources.preprocessing.lang_processors import LangProcessor
 
 from codegen_sources.test_generation.evosuite_tests_translators.evosuite_to_python import (
@@ -79,15 +79,14 @@ logger = getLogger()
 
 
 def eval_state(proc: tp.Any, proc_name: str) -> tp.Tuple[str, tp.Optional[str]]:
-    results = ""
     stderr = b""
+    results = ""
     try:
         try:
             result, stderr = proc.communicate(timeout=120)
         except subprocess.TimeoutExpired:
             c = (
-                "kill `ps aux | grep '"
-                + proc_name
+                f"kill `ps aux | grep '{proc_name}"
                 + "' | grep -v jupyter | grep -v grep | awk '{print($2)}'`"
             )
             subprocess.run(
@@ -250,8 +249,8 @@ def convert_filled_arguments(script_model, f, lang, lang_processor, f_name=None)
                     for i, t in enumerate(argument_types_gold)
                     if t == "int" and i > param_index
                 ]
-                if any([i > param_index for i in ints_indices]):
-                    array_length_arg = min([i for i in ints_indices if i > param_index])
+                if any(i > param_index for i in ints_indices):
+                    array_length_arg = min(i for i in ints_indices if i > param_index)
                 else:
                     array_length_arg = min(ints_indices)
                 new_function_lines.append(
@@ -264,11 +263,11 @@ def convert_filled_arguments(script_model, f, lang, lang_processor, f_name=None)
                 )
                 new_params_strings.append(f"string_param{param_index}")
             elif param_type_gold == "string" and "char" in param_type_filled:
-                new_function_lines.append(
-                    f"char char_arr_param{param_index}[param{param_index}.length() + 1];"
-                )
-                new_function_lines.append(
-                    f"strcopy(char_arr_param{param_index}, param{param_index}.c_str());"
+                new_function_lines.extend(
+                    (
+                        f"char char_arr_param{param_index}[param{param_index}.length() + 1];",
+                        f"strcopy(char_arr_param{param_index}, param{param_index}.c_str());",
+                    )
                 )
                 new_params_strings.append(f"char_arr_param{param_index}")
             else:
@@ -346,7 +345,7 @@ def submit_codenet_functions(functions_list, id, lang, start_lang, data_folder):
         )
     inputs = input_outputs[::2]
     outputs = input_outputs[1::2]
-    for try_id, f_fill in enumerate(functions_list):
+    for f_fill in functions_list:
         replaced_code = full_solution.replace(ref_solution, f_fill)
         assert replaced_code != ref_solution
         result = runner.check_outputs(replaced_code, inputs, outputs)
@@ -376,7 +375,7 @@ def submit_evosuite_functions(
         return [return_script_not_found()], id
     test = test_dictionary[id]
     results_list = []
-    for try_id, f_fill in enumerate(functions_list):
+    for f_fill in functions_list:
         f = f_fill.rstrip()
         result = test_runner.get_tests_results(f, test)
         results_list.append((result[0], None))
@@ -621,9 +620,7 @@ def transform_to_java_object_type(t):
         return t
     if t == "int":
         return "Integer"
-    if t == "char":
-        return "Character"
-    return t.capitalize()
+    return "Character" if t == "char" else t.capitalize()
 
 
 def get_return_type(tokenized_java):
@@ -635,6 +632,6 @@ def init_eval_scripts_folder(data_set, lang1, lang2, params):
         params.eval_scripts_root, "{0}-{1}.{2}".format(lang1, lang2, data_set),
     )
     subprocess.Popen(
-        "mkdir -p %s" % params.eval_scripts_folders[(lang1, lang2, data_set)],
+        f"mkdir -p {params.eval_scripts_folders[lang1, lang2, data_set]}",
         shell=True,
     ).wait()

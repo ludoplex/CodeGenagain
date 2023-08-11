@@ -82,11 +82,9 @@ class Evaluator(object):
         # create directory to store hypotheses, and reference files for BLEU evaluation
         if self.params.is_master:
             params.hyp_path = os.path.join(params.dump_path, "hypotheses")
-            subprocess.Popen("mkdir -p %s" % params.hyp_path, shell=True).wait()
+            subprocess.Popen(f"mkdir -p {params.hyp_path}", shell=True).wait()
             params.eval_scripts_root = os.path.join(params.dump_path, "eval_scripts")
-            subprocess.Popen(
-                "mkdir -p %s" % params.eval_scripts_root, shell=True
-            ).wait()
+            subprocess.Popen(f"mkdir -p {params.eval_scripts_root}", shell=True).wait()
             self.params.ref_paths = {}
             self.params.id_paths = {}
             self.params.eval_scripts_folders = {}
@@ -117,18 +115,19 @@ class Evaluator(object):
 
         if lang2 is None or lang2 == lang1:
             key = lang1 if span is None else (lang1, span)
-            if stream and lang2 is None:
-                iterator = self.data["mono_stream"][key][data_set].get_iterator(
+            iterator = (
+                self.data["mono_stream"][key][data_set].get_iterator(
                     shuffle=False, subsample=subsample
                 )
-            else:
-                iterator = self.data["mono"][key][data_set].get_iterator(
+                if stream and lang2 is None
+                else self.data["mono"][key][data_set].get_iterator(
                     tokens_per_batch=self.params.eval_tokens_per_batch,
                     max_batch_size=-1,
                     shuffle=False,
                     group_by_size=True,
                     n_sentences=n_sentences,
                 )
+            )
         else:
             assert stream is False
             _lang1, _lang2 = (lang1, lang2) if lang1 < lang2 else (lang2, lang1)
@@ -229,7 +228,7 @@ class Evaluator(object):
                     f.write("\n".join(lang1_txt) + "\n")
                 with open(lang2_path, "w", encoding="utf-8") as f:
                     f.write("\n".join(lang2_txt) + "\n")
-                if len(spans) > 0:
+                if spans:
                     with open(spans_path, "w", encoding="utf-8") as f:
                         f.write("\n".join([str(s) for s in spans]) + "\n")
 
@@ -339,12 +338,12 @@ class Evaluator(object):
                     + params.eval_computation_pivot
                 )
                 if params.eval_bt_pairs:
-                    set_keys |= set([(l2, l3) for _, l2, l3 in params.bt_steps])
+                    set_keys |= {(l2, l3) for _, l2, l3 in params.bt_steps}
 
                 for i_set, keys in enumerate(sorted(set_keys)):
                     print(f"Evaluating pair {i_set + 1} / {len(set_keys)}")
                     spans = None
-                    assert len(keys) == 2 or len(keys) == 3
+                    assert len(keys) in {2, 3}
                     lang1, lang2 = keys[0], keys[1]
                     if len(keys) == 3:
                         spans = keys[2]
@@ -403,57 +402,50 @@ class Evaluator(object):
                     for obfuscation_proba in deobf_probas_to_eval:
                         for score_type in ["precision", "recall", "F1"]:
                             scores[
-                                "%s_obf_proba_%s_mt_subtoken_%s"
-                                % (data_set, 1 - obfuscation_proba, score_type)
+                                f"{data_set}_obf_proba_{1 - obfuscation_proba}_mt_subtoken_{score_type}"
                             ] = np.mean(
                                 [
                                     scores[
-                                        "%s_%s_mt_subtoken_%s"
-                                        % (
-                                            data_set,
-                                            get_l1l2_string(
-                                                lang1, lang2, obfuscation_proba
-                                            ),
-                                            score_type,
-                                        )
+                                        f"{data_set}_{get_l1l2_string(lang1, lang2, obfuscation_proba)}_mt_subtoken_{score_type}"
                                     ]
                                     for lang1, lang2 in params.do_steps
                                 ]
                             )
-                _clm_mono = [l1 for (l1, l2) in params.clm_steps if l2 is None]
-                if len(_clm_mono) > 0:
-                    scores["%s_clm_ppl" % data_set] = np.mean(
+                if _clm_mono := [
+                    l1 for (l1, l2) in params.clm_steps if l2 is None
+                ]:
+                    scores[f"{data_set}_clm_ppl"] = np.mean(
                         [
-                            scores["%s_%s_clm_ppl" % (data_set, lang)]
+                            scores[f"{data_set}_{lang}_clm_ppl"]
                             for lang in _clm_mono
                         ]
                     )
-                    scores["%s_clm_acc" % data_set] = np.mean(
+                    scores[f"{data_set}_clm_acc"] = np.mean(
                         [
-                            scores["%s_%s_clm_acc" % (data_set, lang)]
+                            scores[f"{data_set}_{lang}_clm_acc"]
                             for lang in _clm_mono
                         ]
                     )
-                _mlm_mono = [l1 for (l1, l2) in params.mlm_steps if l2 is None]
-                if len(_mlm_mono) > 0:
-                    scores["%s_mlm_ppl" % data_set] = np.mean(
+                if _mlm_mono := [
+                    l1 for (l1, l2) in params.mlm_steps if l2 is None
+                ]:
+                    scores[f"{data_set}_mlm_ppl"] = np.mean(
                         [
-                            scores["%s_%s_mlm_ppl" % (data_set, lang)]
+                            scores[f"{data_set}_{lang}_mlm_ppl"]
                             for lang in _mlm_mono
                         ]
                     )
-                    scores["%s_mlm_acc" % data_set] = np.mean(
+                    scores[f"{data_set}_mlm_acc"] = np.mean(
                         [
-                            scores["%s_%s_mlm_acc" % (data_set, lang)]
+                            scores[f"{data_set}_{lang}_mlm_acc"]
                             for lang in _mlm_mono
                         ]
                     )
 
-        if params.is_master:
-            logger.info(f"On GPU {params.global_rank}, scores computed \n\n")
-            return scores
-        else:
+        if not params.is_master:
             return {}
+        logger.info(f"On GPU {params.global_rank}, scores computed \n\n")
+        return scores
 
     def eval_mode(self):
         [enc.eval() for enc in self.encoder]
@@ -557,9 +549,9 @@ class Evaluator(object):
         )
 
         # compute perplexity and prediction accuracy
-        ppl_name = "%s_%s_clm_ppl" % (data_set, l1l2)
-        acc_name = "%s_%s_clm_acc" % (data_set, l1l2)
-        byte_name = "%s_%s_clm_byte_acc" % (data_set, l1l2)
+        ppl_name = f"{data_set}_{l1l2}_clm_ppl"
+        acc_name = f"{data_set}_{l1l2}_clm_acc"
+        byte_name = f"{data_set}_{l1l2}_clm_byte_acc"
         scores[ppl_name] = np.exp(xe_loss / n_words)
         scores[acc_name] = 100.0 * n_valid / n_words
         scores[byte_name] = 100.0 * valid_bytes / n_bytes
@@ -649,8 +641,8 @@ class Evaluator(object):
             n_valid += (word_scores.max(1)[1] == y).sum().item()
 
         # compute perplexity and prediction accuracy
-        ppl_name = "%s_%s_mlm_ppl" % (data_set, l1l2)
-        acc_name = "%s_%s_mlm_acc" % (data_set, l1l2)
+        ppl_name = f"{data_set}_{l1l2}_mlm_ppl"
+        acc_name = f"{data_set}_{l1l2}_mlm_acc"
         scores[ppl_name] = np.exp(xe_loss / n_words) if n_words > 0 else 1e9
         scores[acc_name] = 100.0 * n_valid / n_words if n_words > 0 else 0.0
 

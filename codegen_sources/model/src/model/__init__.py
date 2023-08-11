@@ -31,11 +31,11 @@ def add_missing_parameters(parameters: tp.Any, log: bool = True) -> None:
     from codegen_sources.model.train import get_parser  # avoid circular import :(
 
     parser = get_parser()
-    # get all defaults (simpler for debugging)
-    defaults = {}
-    for action in parser._actions:  # pylint: disable=protected-access
-        if not action.required and action.dest != "help":
-            defaults[action.dest] = action.default
+    defaults = {
+        action.dest: action.default
+        for action in parser._actions
+        if not action.required and action.dest != "help"
+    }
     if isinstance(parameters, utils.AttrDict):
         for p, val in defaults.items():
             if p not in parameters.__dict__:
@@ -55,11 +55,11 @@ def check_model_params(params):
     s = params.word_mask_keep_rand.split(",")
     assert len(s) == 3
     s = [float(x) for x in s]
-    assert all([0 <= x <= 1 for x in s]) and sum(s) == 1
-    params.word_mask = s[0]
+    assert all(0 <= x <= 1 for x in s) and sum(s) == 1
     params.word_keep = s[1]
     params.word_rand = s[2]
 
+    params.word_mask = s[0]
     if params.mask_length == "":
         params.mask_length = None
         params.mask_length_dist = None
@@ -136,14 +136,14 @@ def check_model_params(params):
         else:
             s = params.reload_model.split(",")
             assert len(s) == 2
-            assert all([x == "" or os.path.isfile(x) for x in s]), [
+            assert all(x == "" or os.path.isfile(x) for x in s), [
                 x for x in s if not os.path.isfile(x)
             ]
         if params.use_classifier and params.reload_classifier == "":
             params.reload_classifier = params.reload_model
 
-    assert not (
-        params.beam_size > 1 and params.number_samples > 1
+    assert (
+        params.beam_size <= 1 or params.number_samples <= 1
     ), "Cannot sample when already doing beam search"
     assert (params.eval_temperature is None) == (
         params.number_samples <= 1
@@ -191,15 +191,17 @@ def build_model(params, dico, gpu=True):
         # reload a pretrained model
         if params.reload_model != "":
             logger.info("============ Model Reloading")
-            logger.info("Reloading model from %s ..." % params.reload_model)
+            logger.info(f"Reloading model from {params.reload_model} ...")
             reload_transformer(
                 params, params.reload_model, dico, model, "model", gpu=gpu
             )
 
-        logger.info("Model: {}".format(model))
+        logger.info(f"Model: {model}")
         logger.info(
-            "Number of parameters (model): %i"
-            % sum([p.numel() for p in model.parameters() if p.requires_grad])
+            (
+                "Number of parameters (model): %i"
+                % sum(p.numel() for p in model.parameters() if p.requires_grad)
+            )
         )
         logger.info("")
 
@@ -238,17 +240,17 @@ def build_model(params, dico, gpu=True):
         if params.reload_model != "":
             logger.info("============ Model Reloading")
             enc_path, dec_path = params.reload_model.split(",")
-            assert not (enc_path == "" and dec_path == "")
+            assert enc_path != "" or dec_path != ""
 
             # reload encoder
             if enc_path != "":
-                logger.info("Reloading encoder from %s ..." % enc_path)
+                logger.info(f"Reloading encoder from {enc_path} ...")
                 reload_transformer(params, enc_path, dico, encoder, "encoder", gpu=gpu)
 
             # reload decoders
             if dec_path != "":
                 for i, dec in enumerate(decoders):
-                    logger.info("Reloading decoders from %s ..." % dec_path)
+                    logger.info(f"Reloading decoders from {dec_path} ...")
                     if params.reload_encoder_for_decoder:
                         reload_transformer(
                             params, dec_path, dico, dec, "encoder", gpu=gpu
@@ -258,15 +260,25 @@ def build_model(params, dico, gpu=True):
                             params, dec_path, dico, dec, "decoder", gpu, i
                         )
 
-        logger.debug("Encoder: {}".format(encoder))
-        logger.debug("Decoder: {}".format(decoders))
+        logger.debug(f"Encoder: {encoder}")
+        logger.debug(f"Decoder: {decoders}")
         logger.info(
-            "Number of parameters (encoder): %i"
-            % sum([p.numel() for p in encoder.parameters() if p.requires_grad])
+            (
+                "Number of parameters (encoder): %i"
+                % sum(
+                    p.numel() for p in encoder.parameters() if p.requires_grad
+                )
+            )
         )
         logger.info(
-            "Number of parameters (decoders): %i"
-            % sum([p.numel() for p in decoders[0].parameters() if p.requires_grad])
+            (
+                "Number of parameters (decoders): %i"
+                % sum(
+                    p.numel()
+                    for p in decoders[0].parameters()
+                    if p.requires_grad
+                )
+            )
         )
         logger.info(f"Number of decoders: {len(decoders)}")
         logger.info("")
@@ -288,7 +300,7 @@ def build_classifier(params):
 
     # reload a pretrained model
     if params.reload_classifier != "":
-        logger.info("Reloading classifier from %s ..." % params.reload_classifier)
+        logger.info(f"Reloading classifier from {params.reload_classifier} ...")
         reloaded = torch.load(
             params.reload_classifier,
             map_location=lambda storage, loc: storage.cuda(params.local_rank),
@@ -299,11 +311,11 @@ def build_classifier(params):
             )
         else:
             reloaded = reloaded["classifier"]
-            if all([k.startswith("module.") for k in reloaded.keys()]):
+            if all(k.startswith("module.") for k in reloaded.keys()):
                 reloaded = {k[len("module.") :]: v for k, v in reloaded.items()}
             classifier.load_state_dict(reloaded)
 
-    logger.info("Classifier: {}".format(classifier))
+    logger.info(f"Classifier: {classifier}")
 
     return [classifier.cuda()]
 
@@ -329,7 +341,7 @@ def reload_transformer(
     if "state_dicts" in reloaded:  # compatibility with new online pipeline
         logger.warning("Reloading from multixp checkpoint (skipping safety checks)")
         for name in ["encoder", "decoder"]:
-            reloaded[name] = reloaded["state_dicts"]["models/" + name]
+            reloaded[name] = reloaded["state_dicts"][f"models/{name}"]
         pdict = {f.name: getattr(params, f.name) for f in dataclasses.fields(params)}
         reloaded["params"] = pdict
         word2id = reloaded.get("word2id", None)
@@ -351,7 +363,7 @@ def reload_transformer(
             for name in DECODER_ONLY_PARAMS:
                 weight_name = name % i
                 if weight_name not in reloaded[model_type]:
-                    logger.warning("Parameter %s not found." % (weight_name))
+                    logger.warning(f"Parameter {weight_name} not found.")
                     encoder_attn_name = weight_name.replace(
                         "encoder_attn", "attentions"
                     )
@@ -386,7 +398,7 @@ def clean_model_state_dict(reloaded, model_type, model_number=None):
             )
         model_reloaded = reloaded[model_type if model_type in reloaded else "model"]
 
-    if all([k.startswith("module.") for k in model_reloaded.keys()]):
+    if all(k.startswith("module.") for k in model_reloaded.keys()):
         model_reloaded = {k[len("module.") :]: v for k, v in model_reloaded.items()}
     reloaded[model_type] = model_reloaded
 
@@ -411,7 +423,7 @@ def reload_word_embeddings(reloaded, dico, model_type):
     assert len(matching_indices) == len(dico)
     if len(word_not_found) > 0:
         logger.warning(
-            f"When reloading word embeddings, could not find embeddings for {len(word_not_found)} words: {word_not_found[0:5] + ['...'] + word_not_found[-5:]}... Initializing them to < unk >."
+            f"When reloading word embeddings, could not find embeddings for {len(word_not_found)} words: {word_not_found[:5] + ['...'] + word_not_found[-5:]}... Initializing them to < unk >."
         )
 
     reloaded[model_type]["embeddings.weight"] = torch.cat(
@@ -423,7 +435,7 @@ def reload_word_embeddings(reloaded, dico, model_type):
     )
 
     if "pred_layer.proj.weight" in reloaded[model_type]:
-        first_line = reloaded[model_type]["pred_layer.proj.weight"][0:1]
+        first_line = reloaded[model_type]["pred_layer.proj.weight"][:1]
         embedding_size = reloaded[model_type]["pred_layer.proj.weight"].shape[1]
         reloaded[model_type]["pred_layer.proj.weight"] = torch.cat(
             [
@@ -468,12 +480,9 @@ def reload_lang_embeddings(reloaded, params, model_type):
     langs_reloaded_id2lang = reloaded_params["id2lang"]
     indices = []
     for lang in [l for i, l in sorted(params.id2lang.items())]:
-        if lang in lang_mapping:
-            lang_ = lang_mapping[lang]
-        else:
-            lang_ = lang
+        lang_ = lang_mapping.get(lang, lang)
         index = [id for l, id in langs_reloaded.items() if l == lang_]
-        if len(index) == 0:
+        if not index:
             logger.warning(
                 f"No match found for lang {lang} {lang_} in {langs_reloaded.keys()}. Initializing randomly."
             )
@@ -488,7 +497,7 @@ def reload_lang_embeddings(reloaded, params, model_type):
             )
         indices.append(index[0])
 
-    first_line = model_reloaded["lang_embeddings.weight"][0:1]
+    first_line = model_reloaded["lang_embeddings.weight"][:1]
     embedding_size = model_reloaded["lang_embeddings.weight"].shape[1]
     model_reloaded["lang_embeddings.weight"] = torch.cat(
         [

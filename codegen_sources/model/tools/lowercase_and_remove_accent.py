@@ -22,7 +22,7 @@ def convert_to_unicode(text):
         elif isinstance(s, six.text_type):
             return s
         else:
-            raise TypeError("not expecting type '%s'" % type(s))
+            raise TypeError(f"not expecting type '{type(s)}'")
 
     return six_ensure_text(text, encoding="utf-8", errors="ignore")
 
@@ -44,4 +44,4 @@ def run_strip_accents(text):
 for line in sys.stdin:
     line = convert_to_unicode(line.rstrip().lower())
     line = run_strip_accents(line)
-    print("%s" % line.lower())
+    print(f"{line.lower()}")

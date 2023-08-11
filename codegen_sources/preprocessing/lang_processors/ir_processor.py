@@ -15,8 +15,8 @@ class IRProcessor(LangProcessor):
     def tokenize_code(
         self, code: str, keep_comments: bool = False, process_strings: bool = True
     ):
-        code = code.replace("\n", f" NEW_LINE ").replace("\r", "")
+        code = code.replace("\n", " NEW_LINE ").replace("\r", "")
         return re.sub(r"\s+", " ", code).split(" ")
 
     def detokenize_code(self, code):
-        return code.replace(f" NEW_LINE ", "\n").replace(NEWLINE_TOK, "\n")
+        return code.replace(" NEW_LINE ", "\n").replace(NEWLINE_TOK, "\n")

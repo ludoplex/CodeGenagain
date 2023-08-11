@@ -40,15 +40,15 @@ class GoProcessor(TreeSitterLangProcessor):
         )
 
     def detokenize_code(self, code):
-        assert isinstance(code, str) or isinstance(code, list)
+        assert isinstance(code, (str, list))
         if isinstance(code, list):
             code = " ".join(code)
         code = re.sub(r"' (.) '", r"'\1'", code)
         return super().detokenize_code(code)
 
     def get_function_name(self, function):
-        assert isinstance(function, str) or isinstance(
-            function, list
+        assert isinstance(
+            function, (str, list)
         ), f"function is not the right type, should be str or list : {function}"
         if isinstance(function, str):
             function = function.split()
@@ -74,10 +74,7 @@ class GoProcessor(TreeSitterLangProcessor):
         if not tokenized:
             assert isinstance(code, str)
             code = " ".join(self.tokenize_code(code))
-        if isinstance(code, list):
-            code_str = " ".join(code)
-        else:
-            code_str = code
+        code_str = " ".join(code) if isinstance(code, list) else code
         assert isinstance(code_str, str)
         try:
             code_str = (
@@ -118,7 +115,7 @@ class GoProcessor(TreeSitterLangProcessor):
                         token_types.append(token_type)
                     if token == "{":
                         number_indent = 1
-                        while not (token == "}" and number_indent == 0):
+                        while token != "}" or number_indent != 0:
                             try:
                                 i.next()
                                 token, token_type = tokens_types[i.i]

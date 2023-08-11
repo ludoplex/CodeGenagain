@@ -60,13 +60,12 @@ def open_file_dict(
 ) -> tp.Iterator[tp.Dict[str, tp.TextIO]]:
     """Context for opening a dict of filepaths and safely close them at the end"""
     with contextlib.ExitStack() as stack:
-        handles = {
+        yield {
             x: stack.enter_context(
                 Path(fp).open(mode, encoding="utf-8", errors="ignore")
             )
             for x, fp in filepaths.items()
         }
-        yield handles  # type: ignore
 
 
 @contextlib.contextmanager
@@ -103,7 +102,7 @@ class DatasetMode:
                 f"YourNameMode (got: {cls.__name__})"
             )
         snake_name = (
-            "".join(["_" + c.lower() if c.isupper() else c for c in parts[0]])
+            "".join([f"_{c.lower()}" if c.isupper() else c for c in parts[0]])
             .lstrip("_")
             .replace("i_r_", "ir_")
         )
@@ -125,10 +124,7 @@ class DatasetMode:
         self.suffixes = suffixes
         self.suffixes_for_postprocessing = suffixes_for_postprocessing
 
-        if processed_lines is None:
-            self.processed_lines = set()
-        else:
-            self.processed_lines = processed_lines
+        self.processed_lines = set() if processed_lines is None else processed_lines
         self.parallel_dataset = parallel_dataset
         self.keep_comments = keep_comments
 
@@ -197,10 +193,8 @@ class DatasetMode:
             for json_file in self.folder.glob(f"{language}.*.json.gz")
             if extract_language_name(json_file) == language
             and not all(
-                [
-                    is_valid_file(Path(name))
-                    for name in self.get_tok_files_for_json(json_file).values()
-                ]
+                is_valid_file(Path(name))
+                for name in self.get_tok_files_for_json(json_file).values()
             )
         ]
         file_langs = [f[1] for f in json_files]
@@ -208,7 +202,7 @@ class DatasetMode:
         logger.info(
             f"{' '.join(self.languages)}: tokenizing {len(json_files)} json files ...: {json_files}"
         )
-        if len(json_files) > 0:
+        if json_files:
             if isinstance(executor, submitit.Executor):
                 jobs += executor.map_array(
                     self.extract_from_json_and_tokenize,
@@ -254,7 +248,7 @@ class DatasetMode:
         lines = []
         hook = fileinput.hook_compressed
         pre_filtered = 0
-        with fileinput.input(str(input_path), openhook=hook) as fi:
+        with fileinput.input(input_path, openhook=hook) as fi:
             for i, line in enumerate(fi):
                 try:
                     parsed_json = json.loads(line)
@@ -289,16 +283,16 @@ class DatasetMode:
                 parallelism_ = cpu_count()
 
             with pebble.ProcessPool(
-                max_workers=parallelism_, initializer=self.initialize_processor,
-            ) as executor:
+                        max_workers=parallelism_, initializer=self.initialize_processor,
+                    ) as executor:
 
                 future = executor.map(
                     self.checkpoint_line, lines, timeout=tokenize_line_timeout
                 )
                 results_for_line = future.result()
                 with open_file_dict(
-                    tok_filepaths, mode="a" if self.processed_lines else "w"
-                ) as tok_files:
+                                tok_filepaths, mode="a" if self.processed_lines else "w"
+                            ) as tok_files:
                     while True:
                         try:
                             line_id = "None"
@@ -331,7 +325,6 @@ class DatasetMode:
                                     error.traceback  # type: ignore
                                 )  # Python's traceback of remote process                    self.processed_lines.add(line_id)
                             raise error
-                            continue
                         # returning None means there was an issue
                         if tokenized_data == TIMEOUT:
                             number_timeouts += 1
@@ -355,8 +348,8 @@ class DatasetMode:
                                 number_errors += 1
                                 continue
                             expected_length = len(next(iter(tokenized_data.values())))
-                            if not all(
-                                expected_length == len(v)
+                            if any(
+                                expected_length != len(v)
                                 for v in tokenized_data.values()
                             ):
                                 logger.info(
@@ -376,7 +369,7 @@ class DatasetMode:
                                 number_errors += 1
                                 continue
                             for tok_code in tok_codes:
-                                if not len(tok_code.splitlines()) <= 1:
+                                if len(tok_code.splitlines()) > 1:
                                     print(f"MULTILINE code:\n{tok_code}")
                                     print(tok_code.splitlines())
                                     print("#" * 50)
@@ -469,10 +462,7 @@ class DatasetMode:
     def pre_tok_filter(self, parsed_json: tp.Dict[str, tp.Any]) -> bool:
         """Lines to filter from json before doing any preprocessing"""
         required_fields = ["content", "repo_name"]
-        if not all(field in parsed_json for field in required_fields):
-            return True
-        else:
-            return False
+        return any(field not in parsed_json for field in required_fields)
 
     def post_tok_filter(self, tokenized_data: tp.Dict[str, tp.List[str]]) -> bool:
         return False
@@ -506,7 +496,7 @@ class DatasetMode:
                 all_tok_path = self.folder.joinpath(all_files_name)
                 if is_valid_file(all_tok_path):
                     continue
-                if len(list(self.folder.glob(files_to_group))) == 0:
+                if not list(self.folder.glob(files_to_group)):
                     continue
                 command = f"cd {self.folder}; cat {files_to_group} > {all_tok_path}"
                 proc = subprocess.run(
@@ -530,15 +520,18 @@ class DatasetMode:
         for lang in self.languages:
             filenames = [f"{lang}.all.{suf}.tok" for suf in self.suffixes]
             # check inputs
-            assert all([is_valid_file(self.folder.joinpath(p)) for p in filenames]), (
-                "files not found: "
-                + ",".join(
-                    [p for p in filenames if not is_valid_file(self.folder.joinpath(p))]
-                )
+            assert all(
+                is_valid_file(self.folder.joinpath(p)) for p in filenames
+            ), "files not found: " + ",".join(
+                [
+                    p
+                    for p in filenames
+                    if not is_valid_file(self.folder.joinpath(p))
+                ]
             )
             # check outputs doesnt exist
             if all(
-                [is_valid_file(self.folder.joinpath(f"{p}.shuf")) for p in filenames]
+                is_valid_file(self.folder.joinpath(f"{p}.shuf")) for p in filenames
             ):
                 logger.info(f"shuffle already done for {lang}")
                 continue
@@ -566,7 +559,7 @@ class DatasetMode:
         Do it in parallel for parallel datasets.
         """
         for lang in self.languages:
-            if dedupe is False:
+            if not dedupe:
                 suffix_to_dedup = []
                 logger.info(
                     f"{lang}: No deduplication will be run. Dedup is set to False."
@@ -599,10 +592,10 @@ class DatasetMode:
                         else []
                     )
                 }
-                if all([is_valid_file(path) for path in output_paths.values()]):
+                if all(is_valid_file(path) for path in output_paths.values()):
                     logger.info(f"shuffle already done for {lang} and suffix {suffix}")
                     continue
-                output_nlines = {k: 0 for k in output_paths.keys()}
+                output_nlines = {k: 0 for k in output_paths}
                 with open_file_dict(output_paths, mode="w") as outputs:
                     with open(
                         all_tok_path, "r", encoding="utf-8", errors="ignore"
@@ -794,7 +787,7 @@ class DatasetMode:
                     for lang in self.languages
                 ]
             ):
-                if not is_valid_file(f.with_suffix(f.suffix + ".pth")):
+                if not is_valid_file(f.with_suffix(f"{f.suffix}.pth")):
                     logger.info(f"binarizing {f} ...")
                     jobs.append(
                         executor.submit(binarize_for_XLM_file, f, self.bpe.vocab_path)

@@ -63,7 +63,7 @@ def test_reload_and_run(efficient_attn) -> None:
     x1 = in_pipe.apply(input_code).to(device)[:, None]
     size = x1.shape[0]
     len1 = torch.LongTensor(1).fill_(size).to(device)
-    lang1_id = lang2id[lang1 + "_sa"]
+    lang1_id = lang2id[f"{lang1}_sa"]
     langs1 = x1.clone().fill_(lang1_id)
 
     # Encode
@@ -104,7 +104,6 @@ def test_reload_and_run(efficient_attn) -> None:
 @pytest.mark.parametrize(
     "efficient_attn", (None,)
 )  # flash attention only works on A100
-# Custom attention bias and padding are not supported by xformers right now
 def test_reload_and_run_with_padding(efficient_attn) -> None:
     BPE_path: Path = Path(codegen_sources.__file__).parents[1].resolve().joinpath(
         "data/bpe/cpp-java-python/codes"
@@ -136,7 +135,7 @@ def test_reload_and_run_with_padding(efficient_attn) -> None:
         pad_index=encoder.dico.pad_index,
     )
     x1, len1 = x1.to(device), len1.to(device)
-    lang1_id = lang2id[lang1 + "_sa"]
+    lang1_id = lang2id[f"{lang1}_sa"]
     langs1 = x1.clone().fill_(lang1_id)
 
     # Encode
@@ -215,15 +214,19 @@ def reload_model(BPE_path, efficient_attn, gpu) -> tp.Tuple:
     decoder.eval()
     assert (
         abs(
-            sum([x.mean().item() for x in encoder.state_dict().values()])
-            - 7.67796907491811
+            (
+                sum(x.mean().item() for x in encoder.state_dict().values())
+                - 7.67796907491811
+            )
         )
         < 1e-6
     ), "Encoder badly reloaded"
     assert (
         abs(
-            sum([x.mean().item() for x in decoder.state_dict().values()])
-            - 13.814257268892561
+            (
+                sum(x.mean().item() for x in decoder.state_dict().values())
+                - 13.814257268892561
+            )
         )
         < 1e-6
     ), "Encoder badly reloaded"
@@ -264,11 +267,8 @@ def decode(
     decoder,
     device,
 ):
-    if isinstance(codes_input, str):
-        codes = [codes_input]
-    else:
-        codes = codes_input
-    lang2_id = lang2id[lang2 + "_sa"]
+    codes = [codes_input] if isinstance(codes_input, str) else codes_input
+    lang2_id = lang2id[f"{lang2}_sa"]
     x2, len2 = batch_sentences(
         [numpy.array(in_pipe.apply(code))[1:-1] for code in codes],
         eos_index=decoder.dico.eos_index,

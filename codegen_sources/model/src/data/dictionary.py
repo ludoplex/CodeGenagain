@@ -62,7 +62,7 @@ class Dictionary:
                 "VAR": word2id[OBF["VAR"] % 0],
             }
         else:
-            self.obf_index = dict()
+            self.obf_index = {}
         self.n_obf_tokens = OBFS_TOTAL
         self.check_valid()
 
@@ -187,32 +187,31 @@ class Dictionary:
                 word2id[OBF["VAR"] % (i - OBFS["CLASS"] - OBFS["FUNC"])] = (
                     4 + SPECIAL_WORDS + i
                 )
-        counts = {k: 0 for k in word2id.keys()}
-        f = open(vocab_path, "r", encoding="utf-8")
-        for i, line_str in enumerate(f):
-            if "\u2028" in line_str:
-                skipped += 1
-                continue
-            line = line_str.rstrip().split()
-            if len(line) != 2:
-                skipped += 1
-                continue
-            assert len(line) == 2, (i, line)
-            # assert line[0] not in word2id and line[1].isdigit(), (i, line)
-            assert line[1].lstrip("-").isdigit(), (i, line)
-            if line[0] in word2id:
-                skipped += 1
-                logger.info("%s already in vocab" % line[0])
-                continue
-            if not line[1].lstrip("-").isdigit():
-                skipped += 1
-                logger.info("Empty word at line %s with count %s" % (i, line))
-                continue
-            word2id[line[0]] = (
-                NUM_SPECIAL_TOKENS + i - skipped
-            )  # shift because of extra words
-            counts[line[0]] = int(line[1])
-        f.close()
+        counts = {k: 0 for k in word2id}
+        with open(vocab_path, "r", encoding="utf-8") as f:
+            for i, line_str in enumerate(f):
+                if "\u2028" in line_str:
+                    skipped += 1
+                    continue
+                line = line_str.rstrip().split()
+                if len(line) != 2:
+                    skipped += 1
+                    continue
+                assert len(line) == 2, (i, line)
+                # assert line[0] not in word2id and line[1].isdigit(), (i, line)
+                assert line[1].lstrip("-").isdigit(), (i, line)
+                if line[0] in word2id:
+                    skipped += 1
+                    logger.info(f"{line[0]} already in vocab")
+                    continue
+                if not line[1].lstrip("-").isdigit():
+                    skipped += 1
+                    logger.info(f"Empty word at line {i} with count {line}")
+                    continue
+                word2id[line[0]] = (
+                    NUM_SPECIAL_TOKENS + i - skipped
+                )  # shift because of extra words
+                counts[line[0]] = int(line[1])
         id2word = {v: k for k, v in word2id.items()}
         dico = cls(id2word, word2id, counts)
         logger.info("Read %i words from the vocabulary file." % len(dico))
@@ -232,7 +231,7 @@ class Dictionary:
         dico: Dictionary
         """
         if bin_path is not None and os.path.isfile(bin_path):
-            logger.info("Loading data from %s ..." % bin_path)
+            logger.info(f"Loading data from {bin_path} ...")
             data = torch.load(bin_path)
             assert dico == data["dico"]
             return data
@@ -241,37 +240,34 @@ class Dictionary:
         sentences = []
         unk_words = {}
 
-        # index sentences
-        f = open(path, "r", encoding="utf-8")
-        for i, line in enumerate(f):
-            if i % 1000000 == 0 and i > 0:
-                print(i)
-            s = line.rstrip().split()
-            # skip empty sentences
-            if len(s) == 0:
-                print("Empty sentence in line %i." % i)
-            # index sentence words
-            count_unk = 0
-            indexed = []
-            for w in s:
-                word_id = dico.index(w, no_unk=False)
-                # if we find a special word which is not an unknown word, skip the sentence
-                if 0 <= word_id < 4 + SPECIAL_WORDS and word_id != 3:
-                    logger.warning(
-                        'Found unexpected special word "%s" (%i)!!' % (w, word_id)
-                    )
-                    continue
-                assert word_id >= 0
-                indexed.append(word_id)
-                if word_id == dico.unk_index:
-                    unk_words[w] = unk_words.get(w, 0) + 1
-                    count_unk += 1
-            # add sentence
-            positions.append([len(sentences), len(sentences) + len(indexed)])
-            sentences.extend(indexed)
-            sentences.append(1)  # EOS index
-        f.close()
-
+        with open(path, "r", encoding="utf-8") as f:
+            for i, line in enumerate(f):
+                if i % 1000000 == 0 and i > 0:
+                    print(i)
+                s = line.rstrip().split()
+                # skip empty sentences
+                if len(s) == 0:
+                    print("Empty sentence in line %i." % i)
+                # index sentence words
+                count_unk = 0
+                indexed = []
+                for w in s:
+                    word_id = dico.index(w, no_unk=False)
+                    # if we find a special word which is not an unknown word, skip the sentence
+                    if 0 <= word_id < 4 + SPECIAL_WORDS and word_id != 3:
+                        logger.warning(
+                            'Found unexpected special word "%s" (%i)!!' % (w, word_id)
+                        )
+                        continue
+                    assert word_id >= 0
+                    indexed.append(word_id)
+                    if word_id == dico.unk_index:
+                        unk_words[w] = unk_words.get(w, 0) + 1
+                        count_unk += 1
+                # add sentence
+                positions.append([len(sentences), len(sentences) + len(indexed)])
+                sentences.extend(indexed)
+                sentences.append(1)  # EOS index
         # tensorize data
         positions = np.int64(positions)
         if len(dico) < 1 << 16:
@@ -288,7 +284,7 @@ class Dictionary:
             "unk_words": unk_words,
         }
         if bin_path is not None:
-            print("Saving the data to %s ..." % bin_path)
+            print(f"Saving the data to {bin_path} ...")
             torch.save(data, bin_path, pickle_protocol=4)
 
         return data

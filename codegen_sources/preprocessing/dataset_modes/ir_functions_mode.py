@@ -108,7 +108,7 @@ class IRFunctionsMode(DatasetMode):
                 if not err
             ]
             assert len(f_standalone) == len(irs), (len(f_standalone), len(irs))
-            if len(f_standalone) == 0:
+            if not f_standalone:
                 return default_return
         except KeyboardInterrupt:
             raise

@@ -99,8 +99,7 @@ class Seq2Seq(nn.Module):
                 pred=[torch.cat([x.view(-1) for x in p]+[zero]*(self.max_length-len(p))).view(1,-1) for p in pred]
                 preds.append(torch.cat(pred,0).unsqueeze(0))
 
-            preds=torch.cat(preds,0)
-            return preds
+            return torch.cat(preds,0)
 
 
 
@@ -124,8 +123,7 @@ class Beam(object):
 
     def getCurrentState(self):
         "Get the outputs for the current timestep."
-        batch = self.tt.LongTensor(self.nextYs[-1]).view(-1, 1)
-        return batch
+        return self.tt.LongTensor(self.nextYs[-1]).view(-1, 1)
 
     def getCurrentOrigin(self):
         "Get the backpointers for the current timestep."
@@ -184,11 +182,11 @@ class Beam(object):
             self.finished.append((self.scores[0], len(self.nextYs) - 1, 0))
         self.finished.sort(key=lambda a: -a[0])
         if len(self.finished) != self.size:
-            unfinished=[]
-            for i in range(self.nextYs[-1].size(0)):
-                if self.nextYs[-1][i] != self._eos:
-                    s = self.scores[i]
-                    unfinished.append((s, len(self.nextYs) - 1, i)) 
+            unfinished = [
+                (self.scores[i], len(self.nextYs) - 1, i)
+                for i in range(self.nextYs[-1].size(0))
+                if self.nextYs[-1][i] != self._eos
+            ]
             unfinished.sort(key=lambda a: -a[0])
             self.finished+=unfinished[:self.size-len(self.finished)]
         return self.finished[:self.size]
