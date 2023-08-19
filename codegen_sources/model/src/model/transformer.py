@@ -20,7 +20,7 @@ from codegen_sources.model.src.model.cape_embeddings import CAPE1d
 
 try:
     from xformers import ops as xops  # type: ignore
-except (ImportError, ModuleNotFoundError):
+except ImportError:
     xops = None
     print("No efficient attention.")
 
@@ -73,11 +73,7 @@ def Embedding(num_embeddings, embedding_dim, padding_idx=None):
 
 
 def Linear(in_features, out_features, bias=True):
-    m = nn.Linear(in_features, out_features, bias)
-    # nn.init.normal_(m.weight, mean=0, std=1)
-    # nn.init.xavier_uniform_(m.weight)
-    # nn.init.constant_(m.bias, 0.)
-    return m
+    return nn.Linear(in_features, out_features, bias)
 
 
 def create_sinusoidal_embeddings(n_pos, dim, out):
@@ -297,10 +293,9 @@ class MultiHeadAttention(nn.Module):
                 klen += self.cache["slen"]  # type: ignore
         else:
             klen = kv.size(1)
-        assert dim == self.dim, "Dimensions do not match: %s input vs %s configured" % (
-            dim,
-            self.dim,
-        )
+        assert (
+            dim == self.dim
+        ), f"Dimensions do not match: {dim} input vs {self.dim} configured"
         n_heads = self.n_heads
         dim_per_head = dim // n_heads
         mask_reshape = (bs, 1, qlen, klen) if mask.dim() == 3 else (bs, 1, 1, klen)
@@ -587,7 +582,7 @@ class TransformerModel(nn.Module):
         except (AttributeError, RuntimeError):
             efficient_attn = None
 
-        for layer_id in range(self.n_layers):
+        for _ in range(self.n_layers):
             self.attentions.append(
                 MultiHeadAttention(
                     self.n_heads,
@@ -640,7 +635,7 @@ class TransformerModel(nn.Module):
             elif mode == "predict":
                 return self.predict(**kwargs)
             else:
-                raise Exception("Unknown mode: %s" % mode)
+                raise Exception(f"Unknown mode: {mode}")
 
     def fwd(
         self,
@@ -931,7 +926,7 @@ class TransformerModel(nn.Module):
                 .mul(max_lengths[unfinished_mask].ne(cur_len + 1).long())
             )
 
-            cur_len = cur_len + 1
+            cur_len += 1
 
             previous_unfinished_mask = unfinished_mask
             # stop when there is a </s> in each sentence, or if we exceed the maximal length

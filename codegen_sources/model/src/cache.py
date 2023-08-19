@@ -52,12 +52,10 @@ class Cache(object):
         sentence, and a vector lengths containing the length of each sentence.
         """
         assert all(
-            [
-                len(s) >= l
-                and s[0].item() == self.eos_index
-                and s[l - 1].item() == self.eos_index
-                for s, l in zip(sequences, lengths)
-            ]
+            len(s) >= l
+            and s[0].item() == self.eos_index
+            and s[l - 1].item() == self.eos_index
+            for s, l in zip(sequences, lengths)
         )
         lengths_tensor = torch.LongTensor(lengths)
         sent = torch.LongTensor(max(lengths_tensor), len(lengths_tensor)).fill_(
@@ -104,10 +102,7 @@ class Cache(object):
 class ListCache(Cache):
     def __init__(self, elements: tp.Optional[tp.List] = None, params=None) -> None:
         super().__init__(elements, params)
-        if elements is None:
-            self.elements = []
-        else:
-            self.elements = elements
+        self.elements = [] if elements is None else elements
         self.tokens_per_batch = params.tokens_per_batch
 
     def exists(self, element_id):
@@ -137,14 +132,13 @@ class RoundRobinCache(Cache):
         self.cache_size = params.cache_size
         if elements is None:
             self.elements = []
+        elif len(elements) > self.cache_size:
+            logger.info(
+                f"Taking only the first {self.cache_size} elements from {len(elements)} initial cache elements"
+            )
+            self.elements = elements[: self.cache_size]
         else:
-            if len(elements) > self.cache_size:
-                logger.info(
-                    f"Taking only the first {self.cache_size} elements from {len(elements)} initial cache elements"
-                )
-                self.elements = elements[: self.cache_size]
-            else:
-                self.elements = elements
+            self.elements = elements
         self.tokens_per_batch = params.tokens_per_batch
         self.current_index = 0
 

@@ -26,12 +26,11 @@ def calculate_scores(answers,predictions):
     y_trues,y_preds=[],[]
     for key in answers:
         if key not in predictions:
-            logging.error("Missing prediction for ({},{}) pair.".format(key[0],key[1]))
+            logging.error(f"Missing prediction for ({key[0]},{key[1]}) pair.")
             sys.exit()
         y_trues.append(answers[key])
         y_preds.append(predictions[key])
-    scores={}
-    scores['Recall']=recall_score(y_trues, y_preds, average='macro')
+    scores = {'Recall': recall_score(y_trues, y_preds, average='macro')}
     scores['Prediction']=precision_score(y_trues, y_preds, average='macro')
     scores['F1']=f1_score(y_trues, y_preds, average='macro')
     return scores

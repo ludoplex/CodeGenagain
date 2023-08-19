@@ -68,7 +68,7 @@ def check_same_number_of_lines(file_path1, file_path2):
 def head(file_path, n):
     n = int(n)
     with file_path.open("r", encoding="utf-8") as f:
-        h = [next(f) for i in range(n)]
+        h = [next(f) for _ in range(n)]
     return h
 
 
@@ -105,7 +105,7 @@ def truncate_files(file_paths):
         with f.open("r", encoding="utf-8") as f:
             lines = f.readlines()
             all_lines.append(lines)
-    mini = min([len(lines) for lines in all_lines])
+    mini = min(len(lines) for lines in all_lines)
     for f, i in enumerate(file_paths):
         if len(all_lines[i]) > mini:
             with f.open("w", encoding="utf-8") as f:
@@ -116,7 +116,7 @@ def truncate_files(file_paths):
 def write_head(file_path, n):
     n = int(n)
     with file_path.open("r", encoding="utf-8") as f:
-        h = [next(f) for i in range(n)]
+        h = [next(f) for _ in range(n)]
     with file_path.open("w", encoding="utf-8") as f:
         f.write("".join(h))
     return h
@@ -166,7 +166,7 @@ def shuf_parallel_files(file_paths: tp.List[PathLike]) -> None:
 def get_repo_to_group_dict(repo_groups_path):
     repo_groups = open(repo_groups_path, "r").read().strip()
     repo_groups_dict = json.loads(repo_groups)
-    repo_to_group = dict()
+    repo_to_group = {}
     for k, values in repo_groups_dict.items():
         for v in values:
             assert v not in repo_to_group
@@ -176,7 +176,7 @@ def get_repo_to_group_dict(repo_groups_path):
 
 def binarize_for_XLM_file(file_path, vocab):
     assert get_nlines(file_path) > 0
-    return XLM_preprocess(str(vocab), str(file_path), str(file_path) + ".pth")
+    return XLM_preprocess(str(vocab), str(file_path), f"{str(file_path)}.pth")
 
 
 def create_symlink(file_path, symlink):
@@ -218,7 +218,7 @@ def matched(str):
             count -= 1
         if count < 0:
             return False
-        if c == '"' or c == "'":
+        if c in ['"', "'"]:
             is_in_string = True
             string_char = c
     return count == 0
@@ -253,7 +253,7 @@ def split_arguments(s):
         else:
             arguments[-1].append(c)
         previous_char = c
-        if c == '"' or c == "'":
+        if c in ['"', "'"]:
             is_in_string = True
             string_char = c
 

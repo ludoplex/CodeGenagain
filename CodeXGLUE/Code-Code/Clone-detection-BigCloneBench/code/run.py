@@ -144,10 +144,7 @@ class TextDataset(Dataset):
                 url1,url2,label=line.split('\t')
                 if url1 not in url_to_code or url2 not in url_to_code:
                     continue
-                if label=='0':
-                    label=0
-                else:
-                    label=1
+                label = 0 if label=='0' else 1
                 data.append((url1,url2,label,tokenizer, args,cache,url_to_code))
         if 'test' not in postfix:
             data=random.sample(data,int(len(data)*0.1))
@@ -155,11 +152,11 @@ class TextDataset(Dataset):
         self.examples=list(executor.map(get_example, data))
         if 'train' in postfix:
             for idx, example in enumerate(self.examples[:3]):
-                    logger.info("*** Example ***")
-                    logger.info("idx: {}".format(idx))
-                    logger.info("label: {}".format(example.label))
-                    logger.info("input_tokens: {}".format([x.replace('\u0120','_') for x in example.input_tokens]))
-                    logger.info("input_ids: {}".format(' '.join(map(str, example.input_ids))))
+                logger.info("*** Example ***")
+                logger.info(f"idx: {idx}")
+                logger.info(f"label: {example.label}")
+                logger.info("input_tokens: {}".format([x.replace('\u0120','_') for x in example.input_tokens]))
+                logger.info(f"input_ids: {' '.join(map(str, example.input_ids))}")
 
 
 
@@ -172,8 +169,15 @@ class TextDataset(Dataset):
 
 
 def load_and_cache_examples(args, tokenizer, evaluate=False,test=False,pool=None):
-    dataset = TextDataset(tokenizer, args, file_path=args.test_data_file if test else (args.eval_data_file if evaluate else args.train_data_file),block_size=args.block_size,pool=pool)
-    return dataset
+    return TextDataset(
+        tokenizer,
+        args,
+        file_path=args.test_data_file
+        if test
+        else (args.eval_data_file if evaluate else args.train_data_file),
+        block_size=args.block_size,
+        pool=pool,
+    )
 
 def set_seed(seed=42):
     random.seed(seed)
@@ -199,9 +203,22 @@ def train(args, train_dataset, model, tokenizer,pool):
     # Prepare optimizer and schedule (linear warmup and decay)
     no_decay = ['bias', 'LayerNorm.weight']
     optimizer_grouped_parameters = [
-        {'params': [p for n, p in model.named_parameters() if not any(nd in n for nd in no_decay)],
-         'weight_decay': args.weight_decay},
-        {'params': [p for n, p in model.named_parameters() if any(nd in n for nd in no_decay)], 'weight_decay': 0.0}
+        {
+            'params': [
+                p
+                for n, p in model.named_parameters()
+                if all(nd not in n for nd in no_decay)
+            ],
+            'weight_decay': args.weight_decay,
+        },
+        {
+            'params': [
+                p
+                for n, p in model.named_parameters()
+                if any(nd in n for nd in no_decay)
+            ],
+            'weight_decay': 0.0,
+        },
     ]
     optimizer = AdamW(optimizer_grouped_parameters, lr=args.learning_rate, eps=args.adam_epsilon)
     scheduler = get_linear_schedule_with_warmup(optimizer, num_warmup_steps=args.warmup_steps,
@@ -280,7 +297,7 @@ def train(args, train_dataset, model, tokenizer,pool):
                 avg_loss=tr_loss
             avg_loss=round(train_loss/tr_num,5)
             if step % 100 == 0:
-                logger.info("step {}: epoch {} loss {}".format(step, idx,avg_loss))
+                logger.info(f"step {step}: epoch {idx} loss {avg_loss}")
 
 
             if (step + 1) % args.gradient_accumulation_steps == 0:
@@ -307,11 +324,11 @@ def train(args, train_dataset, model, tokenizer,pool):
                         logger.info("  "+"*"*20)
 
                         checkpoint_prefix = 'checkpoint-best-f1'
-                        output_dir = os.path.join(args.output_dir, '{}'.format(checkpoint_prefix))
+                        output_dir = os.path.join(args.output_dir, f'{checkpoint_prefix}')
                         if not os.path.exists(output_dir):
                             os.makedirs(output_dir)
                         model_to_save = model.module if hasattr(model,'module') else model
-                        output_dir = os.path.join(output_dir, '{}'.format('model.bin'))
+                        output_dir = os.path.join(output_dir, 'model.bin')
                         torch.save(model_to_save.state_dict(), output_dir)
                         logger.info("Saving model checkpoint to %s", output_dir)
 
@@ -337,11 +354,10 @@ def evaluate(args, model, tokenizer, prefix="",pool=None,eval_when_training=Fals
         model = torch.nn.DataParallel(model)
 
     # Eval!
-    logger.info("***** Running evaluation {} *****".format(prefix))
+    logger.info(f"***** Running evaluation {prefix} *****")
     logger.info("  Num examples = %d", len(eval_dataset))
     logger.info("  Batch size = %d", args.eval_batch_size)
     eval_loss = 0.0
-    nb_eval_steps = 0
     model.eval()
     logits=[]
     y_trues=[]
@@ -353,7 +369,6 @@ def evaluate(args, model, tokenizer, prefix="",pool=None,eval_when_training=Fals
             eval_loss += lm_loss.mean().item()
             logits.append(logit.cpu().numpy())
             y_trues.append(labels.cpu().numpy())
-        nb_eval_steps += 1
     logits=np.concatenate(logits,0)
     y_trues=np.concatenate(y_trues,0)
     best_threshold=0
@@ -386,7 +401,7 @@ def evaluate(args, model, tokenizer, prefix="",pool=None,eval_when_training=Fals
 
     }
 
-    logger.info("***** Eval results {} *****".format(prefix))
+    logger.info(f"***** Eval results {prefix} *****")
     for key in sorted(result.keys()):
         logger.info("  %s = %s", key, str(round(result[key],4)))
 
@@ -406,11 +421,10 @@ def test(args, model, tokenizer, prefix="",pool=None,best_threshold=0):
         model = torch.nn.DataParallel(model)
 
     # Eval!
-    logger.info("***** Running Test {} *****".format(prefix))
+    logger.info(f"***** Running Test {prefix} *****")
     logger.info("  Num examples = %d", len(eval_dataset))
     logger.info("  Batch size = %d", args.eval_batch_size)
     eval_loss = 0.0
-    nb_eval_steps = 0
     model.eval()
     logits=[]
     y_trues=[]
@@ -422,7 +436,6 @@ def test(args, model, tokenizer, prefix="",pool=None,best_threshold=0):
             eval_loss += lm_loss.mean().item()
             logits.append(logit.cpu().numpy())
             y_trues.append(labels.cpu().numpy())
-        nb_eval_steps += 1
     logits=np.concatenate(logits,0)
     y_preds=logits[:,1]>best_threshold
     with open(os.path.join(args.output_dir,"predictions.txt"),'w') as f:

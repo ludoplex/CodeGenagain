@@ -116,7 +116,9 @@ def demangle_names_cpp(full_file, verbose=False, timeout=120):
     names_to_demangle = np.unique(re.findall(r"(?<=@)_\w+", full_file))
     demangled = [
         subprocess.check_output(
-            LLVM_13_PATH + f"llvm-cxxfilt {el}", shell=True, stderr=subprocess.DEVNULL
+            f"{LLVM_13_PATH}llvm-cxxfilt {el}",
+            shell=True,
+            stderr=subprocess.DEVNULL,
         )
         .decode()
         .strip()
@@ -137,7 +139,7 @@ def demangle_names_rust(full_file):
 
     names_to_demangle = np.unique(re.findall(r"(?<=@)_\w+", full_file))
     demangled = [
-        subprocess.check_output(CARGO_PATH + f"rustfilt {el}", shell=True)
+        subprocess.check_output(f"{CARGO_PATH}rustfilt {el}", shell=True)
         .decode()
         .strip()
         for el in names_to_demangle
@@ -194,14 +196,12 @@ def demangle_names_java(full_file):
 @timeout(120)
 def demangle_names_go(full_file):
     GO_PREFIX = "go_0"
-    names_to_demangle = set(
-        [
-            el.rsplit(" ", 1)[1][1:]
-            for el in re.findall(
-                rf"(?<=\n)define .*? @{GO_PREFIX}[\w.]+", "\n" + full_file
-            )
-        ]
-    )
+    names_to_demangle = {
+        el.rsplit(" ", 1)[1][1:]
+        for el in re.findall(
+            rf"(?<=\n)define .*? @{GO_PREFIX}[\w.]+", "\n" + full_file
+        )
+    }
     demangled = [
         name.replace("go_0", "", 1).replace("__", "_") for name in names_to_demangle
     ]
@@ -286,7 +286,7 @@ def extract_lang_IR(lang_file, output_path, lang, verbose=False, timeout=120):
 def extract_cpp_IR(cpp_file, output_path, verbose=False, timeout=120):
     from codegen_sources.external_paths import LLVM_13_PATH
 
-    cmd = LLVM_13_PATH + "/" + CPP_TO_IR_COMMAND.format(cpp_file, output_path)
+    cmd = f"{LLVM_13_PATH}/{CPP_TO_IR_COMMAND.format(cpp_file, output_path)}"
     subprocess.check_call(
         cmd,
         shell=True,
@@ -528,7 +528,11 @@ def extract_relevant_functions(llfile, original_file_name, lang_processor, lang)
 
     indices_to_keep = [el.split(" ", 1)[0] for el in relevant_subprograms]
     relevant_defines = sum(
-        [re.findall(f".* !dbg {itk} " + "{", llfile) for itk in indices_to_keep], []
+        (
+            re.findall(f".* !dbg {itk} " + "{", llfile)
+            for itk in indices_to_keep
+        ),
+        [],
     )
 
     mangled_funcs = extract_all_ll_funcnames("\n".join([""] + relevant_defines))
@@ -551,7 +555,7 @@ def source_file_to_cleaned_IR(
     clean_dir=True,
 ):
     hash_value = uuid.uuid4()
-    work_dir_full = Path(work_dir).joinpath(f"{str(int(time.time()))}_{hash_value}")
+    work_dir_full = Path(work_dir).joinpath(f"{int(time.time())}_{hash_value}")
     work_dir_full.mkdir(parents=True, exist_ok=True)
     if verbose:
         print("Work dir:", work_dir_full)
@@ -592,17 +596,17 @@ def source_file_to_cleaned_IR(
 
 
 def adapt_func_level(code: str, lang: str):
-    if lang == "java":
-        code = "public class UniqueFunc\n{" + code + "}"
     if lang == "cpp":
         code = re.sub("^inline ", "", code)
         code = code.replace("public : ", "")
-    if lang == "rust":
-        code = re.sub("(?<!pub )fn ", "pub unsafe fn ", code)
-    if lang == "go":
+    elif lang == "go":
         assert not code.startswith(
             "package "
         ), f"Code contains package, not at function level:\n{code}\n"
+    elif lang == "java":
+        code = "public class UniqueFunc\n{" + code + "}"
+    elif lang == "rust":
+        code = re.sub("(?<!pub )fn ", "pub unsafe fn ", code)
     return "\n".join([LANG_IMPORTS[lang], code])
 
 

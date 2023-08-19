@@ -39,7 +39,7 @@ from pathlib import Path
 
 
 sys.path.append(str(Path(__file__).parents[3]))
-print("adding to path", str(Path(__file__).parents[3]))
+print("adding to path", Path(__file__).parents[3])
 
 from ...code_runners import test_runners
 

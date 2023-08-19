@@ -41,7 +41,7 @@ class PythonTreeSitterProcessor(tsp.TreeSitterLangProcessor):
             "STOKEN2": '"""',
             "STOKEN3": "'''",
         }
-        char2spetoken = {value: " " + key + " " for key, value in spetoken2char.items()}
+        char2spetoken = {value: f" {key} " for key, value in spetoken2char.items()}
         super().__init__(
             ast_nodes_type_string=[
                 "string",
@@ -75,9 +75,9 @@ class PythonTreeSitterProcessor(tsp.TreeSitterLangProcessor):
         tabs = ""
         for i, line in enumerate(lines):
             line = line.strip()
-            if line.startswith(INDENT + " "):
+            if line.startswith(f"{INDENT} "):
                 tabs += "    "
-                line = line.replace(INDENT + " ", tabs)
+                line = line.replace(f"{INDENT} ", tabs)
             elif line.startswith(DEDENT):
                 number_dedent = line.count(DEDENT)
                 tabs = tabs[4 * number_dedent :]
@@ -266,7 +266,7 @@ class PythonTreeSitterProcessor(tsp.TreeSitterLangProcessor):
         for hint in hints:
             if hint.kind == "return" and hint.name.endswith(special_names):
                 end = hint.name.split(".")[-1]
-                ready.append(hint.with_value(specials["." + end]))
+                ready.append(hint.with_value(specials[f".{end}"]))
             elif name.endswith(
                 (".__getattr__", ".__getattribute__")
             ):  # nearly impossible to type
@@ -282,9 +282,8 @@ class PythonTreeSitterProcessor(tsp.TreeSitterLangProcessor):
         for hint in toprep:
             tok = next(tokens)
             value = cleaner.clean(hint.value)
-            # add optional if actually optional
-            if hint.default is not None and hint.default == "None":
-                if not value.startswith("Optional"):
+            if not value.startswith("Optional"):
+                if hint.default is not None and hint.default == "None":
                     value = f"Optional [ {value} ]"
             dico[tok] = " ".join(self.tokenize_code(value)[:-1])
             ready.append(hint.with_value(tok))
@@ -447,8 +446,10 @@ class CodeHandler:
             last = self.replacements[-1]
             if start < last.end:
                 error = ["Overlapping or unsorted replacements"]
-                for z in (repl, last):
-                    error.append(f"({z}, {self.read(z)} -> {z.value.decode('utf8')})")
+                error.extend(
+                    f"({z}, {self.read(z)} -> {z.value.decode('utf8')})"
+                    for z in (repl, last)
+                )
                 raise ValueError("\n".join(error))
         self.replacements.append(repl)
 
@@ -465,9 +466,7 @@ class CodeHandler:
         parts = []
         start = 0
         for repl in self.replacements:
-            # code up to the node
-            parts.append(self.code[start : repl.start])
-            parts.append(repl.value)
+            parts.extend((self.code[start : repl.start], repl.value))
             start = repl.end
         parts.append(self.code[start:])
         return b"".join(parts).decode("utf8")
@@ -476,8 +475,7 @@ class CodeHandler:
         scopes = []
         while node is not None:
             if "_definition" in node.type:
-                ids = [n for n in node.children if n.type == "identifier"]
-                if ids:
+                if ids := [n for n in node.children if n.type == "identifier"]:
                     scopes.append(self.read(ids[0]))
             node = node.parent
         return list(reversed(scopes))
@@ -497,7 +495,7 @@ class TypeCleaner:
 
     def __init__(self) -> None:
         self.processor = PythonTreeSitterProcessor()
-        self.typing_classes = set(x for x in dir(tp) if x[0].isupper())
+        self.typing_classes = {x for x in dir(tp) if x[0].isupper()}
 
     def get_imports(self, code: tp.Union[str, bytes]) -> tp.List[str]:
         """Get a list of imports involving typing module"""
@@ -551,31 +549,26 @@ class TypeCleaner:
         output = handler.generate()
         textio = f"{tag}.TextIO"
         textio_ph = "!#TEXTIO_PLACEHOLDER#!"  # avoid replacing TextIO by strIO
-        replacements = {textio: textio_ph, f"{tag}.Text": "str"}
-        # to be decided: replace np.ndarray?
-        # replacements.update({x: "NDArray" for x in ["np.ndarray", "ndarray", "np.ndarray"]})
-        # no line break, and use type, not string of type
-        replacements.update({x: "" for x in ["\n", "\r", "'", '"']})
+        replacements = {textio: textio_ph, f"{tag}.Text": "str"} | {
+            x: "" for x in ["\n", "\r", "'", '"']
+        }
         for sin, sout in replacements.items():
             output = output.replace(sin, sout)
         output = output.replace(textio_ph, textio)
         # sanitize main containers
         list_like = ["Set", "List", "Iterator", "Iterable", "Sequence"]
-        add_any = {f"{tag}.{x}": f"{tag}.Any" for x in list_like}
-        add_any.update(
-            {
-                f"{tag}.Dict": f"str,{tag}.Any",
-                f"{tag}.Mapping": f"str,{tag}.Any",
-                f"{tag}.Callable": f"...,{tag}.Any",
-                f"{tag}.Generator": f"{tag}.Any,None,None",
-                f"{tag}.Tuple": f"{tag}.Any,...",
-            }
-        )
+        add_any = {f"{tag}.{x}": f"{tag}.Any" for x in list_like} | {
+            f"{tag}.Dict": f"str,{tag}.Any",
+            f"{tag}.Mapping": f"str,{tag}.Any",
+            f"{tag}.Callable": f"...,{tag}.Any",
+            f"{tag}.Generator": f"{tag}.Any,None,None",
+            f"{tag}.Tuple": f"{tag}.Any,...",
+        }
         for cls, content in add_any.items():
             # when there is no subtype, add the default one
             output = re.sub(cls + r"(?!\[)", f"{cls}[{content}]", output)
         output = self._reorder_union(output)
-        output = output.replace(" ", "").replace(tag + ".", "")  # remove tag
+        output = output.replace(" ", "").replace(f"{tag}.", "")
 
         return output
 
@@ -584,7 +577,7 @@ class TypeCleaner:
         by applying Union syntax and ordering the options
         """
         union = f"{self._TAG}.Union"
-        if not any(x in string for x in [union, "|"]):
+        if all(x not in string for x in [union, "|"]):
             return string
         handler = CodeHandler(string)
         tree = self.processor.get_ast(handler.code)
@@ -593,11 +586,9 @@ class TypeCleaner:
         for node in traversal:
             if node.start_byte < move_after:
                 continue
-            children = self._extract_union_children(node, string)
-            # test
-            if children:
+            if children := self._extract_union_children(node, string):
                 content = [handler.read(n).strip() for n in children]
-                content = sorted(set(self._reorder_union(x) for x in content))
+                content = sorted({self._reorder_union(x) for x in content})
                 is_opt = "None" in content
                 if is_opt:
                     content = [c for c in content if c != "None"]
@@ -632,12 +623,11 @@ class TypeCleaner:
                 children = node.children[2:-1]
         children = [c for c in children if c.type not in "|,"]
         resplit = [self._extract_union_children(c, string) for c in children]
-        out = list(
+        return list(
             itertools.chain.from_iterable(
                 r if r else [c] for r, c in zip(resplit, children)
             )
         )
-        return out
 
 
 _counter = itertools.count()
@@ -646,7 +636,7 @@ _counter = itertools.count()
 def id_maker() -> str:
     """Safe id for replacement in the string"""
     num = _counter.__next__()
-    return f"cg_{num}_" + uuid.uuid4().hex[:4]
+    return f"cg_{num}_{uuid.uuid4().hex[:4]}"
 
 
 @dataclasses.dataclass

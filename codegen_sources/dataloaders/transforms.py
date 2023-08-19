@@ -112,8 +112,7 @@ class _InitialSpaces(Transform[str, str]):
         for line in lines:
             length = len(line)
             stripped = line.lstrip(" ")
-            count = length - len(stripped)
-            if count:
+            if count := length - len(stripped):
                 stripped = f"{self.space_char} {count} {stripped}"
             new_lines.append(stripped)
         return "\n".join(new_lines)
@@ -251,8 +250,7 @@ class FastBpe(BpeBase):
         if not isinstance(tok_code, list):
             raise TypeError("Tokenized code must be provided as a list")
         tokens: tp.List[str] = self.bpe_model.apply(tok_code)
-        out = FastBPEMode.repair_bpe_for_obfuscation_line(" ".join(tokens))
-        return out
+        return FastBPEMode.repair_bpe_for_obfuscation_line(" ".join(tokens))
 
     def revert(self, subtokens: str) -> TokCode:
         return subtokens.replace("@@ ", "").split()
@@ -293,7 +291,7 @@ class SentencePieceTokenizer(Transform[str, str]):
         string = match.group(0)
         out = string.replace(" ", "")
         if match.group("next") is not None:
-            out = out[:-1] + " " + match.group("next")
+            out = f"{out[:-1]} " + match.group("next")
         if match.group("prev") is not None:
             out = match.group("prev") + " " + out[1:]
         out = out.replace("><", "> <")
@@ -304,9 +302,9 @@ class SentencePieceTokenizer(Transform[str, str]):
         final = r"(?P<next>\S)?"
         start = r"(?P<prev>\S)?"
         for prefix in deobf.OBFUSCATED_PREFIXES:
-            pattern = start + f'{"( )?".join(prefix)}(( )?[0-9]+)+' + final
+            pattern = f'{start}{"( )?".join(prefix)}(( )?[0-9]+)+{final}'
             out = re.sub(pattern, self.repl, out)
-        pattern = start + "(< special [0-9]+ >)+" + final
+        pattern = f"{start}(< special [0-9]+ >)+{final}"
         out = re.sub(pattern, self.repl, out)
         return out
 
@@ -331,8 +329,7 @@ class RobertaBpe(BpeBase):
         lines = [self.bpe_model._tokenize(line.strip()) for line in lines]
         repair = RobertaBPEMode.repair_bpe_for_obfuscation_line
         lines = [repair(" ".join(line)) for line in lines]
-        out = self.new_line.join(lines)
-        return out
+        return self.new_line.join(lines)
 
     def revert(self, subtokens: str) -> TokCode:
         out: str = restore_roberta_segmentation_sentence(subtokens)  # type: ignore
@@ -378,7 +375,7 @@ class BpeTensorizer(Transform[str, torch.Tensor]):
 
     def revert(self, tensor: torch.Tensor) -> str:
         tensor = tensor.squeeze()
-        if not tensor.ndim == 1:
+        if tensor.ndim != 1:
             raise ValueError(
                 f"Only 1-dimensional tensors can be processed (got {tensor.shape})."
             )

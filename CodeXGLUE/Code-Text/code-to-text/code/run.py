@@ -148,15 +148,15 @@ def convert_examples_to_features(examples, tokenizer, args,stage=None):
         if example_index < 5:
             if stage=='train':
                 logger.info("*** Example ***")
-                logger.info("idx: {}".format(example.idx))
+                logger.info(f"idx: {example.idx}")
 
                 logger.info("source_tokens: {}".format([x.replace('\u0120','_') for x in source_tokens]))
-                logger.info("source_ids: {}".format(' '.join(map(str, source_ids))))
-                logger.info("source_mask: {}".format(' '.join(map(str, source_mask))))
+                logger.info(f"source_ids: {' '.join(map(str, source_ids))}")
+                logger.info(f"source_mask: {' '.join(map(str, source_mask))}")
 
                 logger.info("target_tokens: {}".format([x.replace('\u0120','_') for x in target_tokens]))
-                logger.info("target_ids: {}".format(' '.join(map(str, target_ids))))
-                logger.info("target_mask: {}".format(' '.join(map(str, target_mask))))
+                logger.info(f"target_ids: {' '.join(map(str, target_ids))}")
+                logger.info(f"target_mask: {' '.join(map(str, target_mask))}")
 
         features.append(
             InputFeatures(

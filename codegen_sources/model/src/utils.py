@@ -40,11 +40,11 @@ PathLike = tp.Union[Path, str]
 REPO_ROOT = Path(__file__).parents[3].absolute()
 TREE_SITTER_ROOT = REPO_ROOT.joinpath("tree-sitter")
 sys.path.append(str(REPO_ROOT))
-print("adding to path", str(REPO_ROOT))
+print("adding to path", REPO_ROOT)
 
 from .logger import create_logger
 
-DUMP_PATH = "/checkpoint/%s/dumped" % getpass.getuser()
+DUMP_PATH = f"/checkpoint/{getpass.getuser()}/dumped"
 dynamic_coeff = [
     "lambda_clm",
     "lambda_mlm",
@@ -171,11 +171,11 @@ def initialize_exp(params):
         else:
             assert "'" not in x
             if re.match("^[a-zA-Z0-9_]+$", x):
-                command.append("%s" % x)
+                command.append(f"{x}")
             else:
-                command.append("'%s'" % x)
+                command.append(f"'{x}'")
     command = " ".join(command)
-    params.command = command + ' --exp_id "%s"' % params.exp_id
+    params.command = f'{command} --exp_id "{params.exp_id}"'
 
     # check experiment name
     assert len(params.exp_name.strip()) > 0
@@ -187,10 +187,12 @@ def initialize_exp(params):
     )
     logger.info("============ Initialized logger ============")
     logger.info(
-        "\n".join("%s: %s" % (k, str(v)) for k, v in sorted(dict(vars(params)).items()))
+        "\n".join(
+            f"{k}: {str(v)}" for k, v in sorted(dict(vars(params)).items())
+        )
     )
     logger.info("The experiment will be stored in %s\n" % params.dump_path)
-    logger.info("Running command: %s" % command)
+    logger.info(f"Running command: {command}")
     logger.info("")
     return logger
 
@@ -205,7 +207,7 @@ def get_dump_path(params):
     # create the sweep path if it does not exist
     sweep_path = os.path.join(dump_path, params.exp_name)
     if not os.path.exists(sweep_path):
-        subprocess.Popen("mkdir -p %s" % sweep_path, shell=True).wait()
+        subprocess.Popen(f"mkdir -p {sweep_path}", shell=True).wait()
 
     # create an ID for the job if it is not given in the parameters.
     # if we run on the cluster, the job ID is the one of Chronos.
@@ -228,7 +230,7 @@ def get_dump_path(params):
     # create the dump folder / update parameters
     params.dump_path = os.path.join(sweep_path, params.exp_id)
     if not os.path.isdir(params.dump_path):
-        subprocess.Popen("mkdir -p %s" % params.dump_path, shell=True).wait()
+        subprocess.Popen(f"mkdir -p {params.dump_path}", shell=True).wait()
 
 
 # cant be typed since we cant map inputs to outputs
@@ -334,8 +336,7 @@ def restore_sentencepiece_segmentation_string(
 
 
 def restore_fastBPE_segmentation(path: str) -> None:
-    restore_cmd = "sed -i -r 's/(@@ )|(@@ ?$)//g' %s"
-    subprocess.Popen(restore_cmd % path, shell=True).wait()
+    subprocess.Popen(f"sed -i -r 's/(@@ )|(@@ ?$)//g' {path}", shell=True).wait()
 
 
 def parse_lambda_config(params):
@@ -351,16 +352,12 @@ def parse_lambda_config(params):
     if len(params.classif_steps) > 0:
         x = getattr(params, "lambda_classif")
         split = [s.split("::") for s in x.split("/")]
-        assert all(len(s) == 2 or len(s) == 1 for s in split)
+        assert all(len(s) in {2, 1} for s in split)
         assert all(
             tuple(s[0].split("-")) in params.classif_steps for s in split if len(s) == 2
         )
-        assert sum([1 if len(s) == 1 else 0 for s in split]) < 2
-        general_lambda = "1"
-        for s in split:
-            if len(s) == 1:
-                general_lambda = s[0]
-                break
+        assert sum(1 if len(s) == 1 else 0 for s in split) < 2
+        general_lambda = next((s[0] for s in split if len(s) == 1), "1")
         lambda_by_step = {s[0]: s[1] for s in split if len(s) == 2}
         for step in params.classif_steps:
             step = "-".join(step)
@@ -385,7 +382,7 @@ def parse_lambda_config(params):
         split = x.split(",")
         if len(split) == 1:
             setattr(params, name, float(x))
-            setattr(params, name + "_config", None)
+            setattr(params, f"{name}_config", None)
         else:
             split = [s.split(":") for s in split]
             assert all(len(s) == 2 for s in split)
@@ -394,7 +391,7 @@ def parse_lambda_config(params):
                 int(split[i][0]) < int(split[i + 1][0]) for i in range(len(split) - 1)
             )
             setattr(params, name, float(split[0][1]))
-            setattr(params, name + "_config", [(int(k), float(v)) for k, v in split])
+            setattr(params, f"{name}_config", [(int(k), float(v)) for k, v in split])
 
 
 def get_lambda_value(config, n_iter: int) -> float:
@@ -404,7 +401,7 @@ def get_lambda_value(config, n_iter: int) -> float:
     ranges = [
         i for i in range(len(config) - 1) if config[i][0] <= n_iter < config[i + 1][0]
     ]
-    if len(ranges) == 0:
+    if not ranges:
         assert n_iter >= config[-1][0]
         return config[-1][1]
     assert len(ranges) == 1
@@ -419,7 +416,7 @@ def update_lambdas(params, n_iter):
     Update all lambda coefficients.
     """
     for name in dynamic_coeff:
-        config = getattr(params, name + "_config")
+        config = getattr(params, f"{name}_config")
         if config is not None:
             setattr(params, name, get_lambda_value(config, n_iter))
 
@@ -435,7 +432,7 @@ def set_sampling_probs(data, params):
 
     # monolingual data
     params.mono_list = [k for k, v in data["mono_stream"].items() if "train" in v]
-    if len(params.mono_list) > 0:
+    if params.mono_list:
         probs = np.array(
             [1.0 * len(data["mono_stream"][lang]["train"]) for lang in params.mono_list]
         )
@@ -446,7 +443,7 @@ def set_sampling_probs(data, params):
 
     # parallel data
     params.para_list = [k for k, v in data["para"].items() if "train" in v]
-    if len(params.para_list) > 0:
+    if params.para_list:
         probs = np.array(
             [
                 1.0 * len(data["para"][(l1, l2)]["train"])
@@ -473,7 +470,7 @@ def concat_batches(
     """
     Concat batches with different languages.
     """
-    assert reset_positions is False or lang1_id != lang2_id
+    assert not reset_positions or lang1_id != lang2_id
     lengths = len1 + len2
     if not reset_positions:
         lengths -= 1
@@ -552,7 +549,7 @@ def shuf_order(langs, params=None, n=5):
                 len(mono), size=min(n, len(mono)), p=p_mono, replace=True
             )
         ]
-        if len(mono) > 0
+        if mono
         else []
     )
     s_para = (
@@ -562,7 +559,7 @@ def shuf_order(langs, params=None, n=5):
                 len(para), size=min(n, len(para)), p=p_para, replace=True
             )
         ]
-        if len(para) > 0
+        if para
         else []
     )
 
@@ -669,21 +666,20 @@ def word_blank(x, l, params, rng):
 def span_masking(x, len, params, max_vocab, rng, torch_rng):
     if params.mask_length_dist is None:
         return word_blank(x, len, params, rng)
-    else:
-        sentences = [
-            mask_spans(x[:l, i], params, max_vocab, torch_rng)
-            for i, l in zip(range(x.size(1)), len)
-        ]
-        newlen = torch.LongTensor([s.size(0) for s in sentences])
-        sent = torch.LongTensor(newlen.max().item(), newlen.size(0)).fill_(
-            params.pad_index
-        )
-        sent[0] = params.eos_index
-        for i, s in enumerate(sentences):
-            if newlen[i] > 2:  # if sentence not empty
-                sent[0 : newlen[i], i] = s
-            sent[newlen[i] - 1, i] = params.eos_index
-        return sent, newlen
+    sentences = [
+        mask_spans(x[:l, i], params, max_vocab, torch_rng)
+        for i, l in zip(range(x.size(1)), len)
+    ]
+    newlen = torch.LongTensor([s.size(0) for s in sentences])
+    sent = torch.LongTensor(newlen.max().item(), newlen.size(0)).fill_(
+        params.pad_index
+    )
+    sent[0] = params.eos_index
+    for i, s in enumerate(sentences):
+        if newlen[i] > 2:  # if sentence not empty
+            sent[0 : newlen[i], i] = s
+        sent[newlen[i] - 1, i] = params.eos_index
+    return sent, newlen
 
 
 def mask_spans(x, params, max_vocab, torch_rng):
@@ -816,9 +812,10 @@ def convert_to_text(batch, lengths, dico, params, generate_several_reps=False):
     batch = batch.cpu().numpy()
     lengths = lengths.cpu().numpy()
 
-    assert (
-        len(batch.shape) == 2 or len(batch.shape) == 3
-    ), f"generated batch shape was {batch.shape} while it should be in dimension 2 or 3"
+    assert len(batch.shape) in {
+        2,
+        3,
+    }, f"generated batch shape was {batch.shape} while it should be in dimension 2 or 3"
     nb_repetitions = 1
     if len(batch.shape) == 2:
         slen, bs = batch.shape
@@ -848,10 +845,7 @@ def convert_to_text(batch, lengths, dico, params, generate_several_reps=False):
                     break
                 words.append(dico[next_element])
             sentences[j].append(" ".join(words))
-    if generate_several_reps:
-        return sentences
-    else:
-        return [s[0] for s in sentences]
+    return sentences if generate_several_reps else [s[0] for s in sentences]
 
 
 def get_programming_language_name(lang):

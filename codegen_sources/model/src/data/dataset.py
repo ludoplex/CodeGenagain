@@ -17,7 +17,7 @@ import torch
 
 
 sys.path.append(str(Path(__file__).parents[4]))
-print("adding to path", str(Path(__file__).parents[4]))
+print("adding to path", Path(__file__).parents[4])
 
 from codegen_sources.model.src.utils import (
     restore_segmentation_sentence,
@@ -120,7 +120,7 @@ class Dataset(object):
         self.unit_tests: tp.Dict[str, tp.Dict[str, str]] = {
             get_programming_language_name(lang): {} for lang in params.st_tgt_langs
         }
-        self.unit_tests_scores: tp.Dict[str, tp.Dict[str, float]] = dict()
+        self.unit_tests_scores: tp.Dict[str, tp.Dict[str, float]] = {}
         self.st_tests_scores: tp.Optional[tp.List[float]] = None  # TODO fix type
         # check number of sentences
         assert len(self.pos) == (self.sent == self.eos_index).sum()
@@ -418,7 +418,7 @@ class ParallelDataset(Dataset):
         The length of the lists should be 2 when doing translation or span classification
          and 3 when doing translation using spans
         """
-        assert len(pos_list) == 2 or len(pos_list) == 3
+        assert len(pos_list) in {2, 3}
         self.eos_index = params.eos_index
         self.pad_index = params.pad_index
         self.sep_index = params.sep_index
@@ -437,7 +437,7 @@ class ParallelDataset(Dataset):
 
         # check number of sentences
         assert all(
-            [len(pos) == len(self) > 0 for pos in self.pos_list]
+            len(pos) == len(self) > 0 for pos in self.pos_list
         ), f"number of sentences do not match {[len(pos) for pos in self.pos_list]}"
 
         # remove empty sentences
@@ -459,7 +459,7 @@ class ParallelDataset(Dataset):
         eos = self.eos_index
 
         # check number of sentences
-        assert all([len(pos) == len(self) > 0 for pos in self.pos_list])
+        assert all(len(pos) == len(self) > 0 for pos in self.pos_list)
 
         # check sentences indices
         for i, (pos, sent) in enumerate(zip(self.pos_list, self.sent_list)):
@@ -601,7 +601,7 @@ class ParallelDataset(Dataset):
         """
         Return a sentences iterator.
         """
-        assert seed is None or shuffle is True and type(seed) is int
+        assert seed is None or shuffle and type(seed) is int
         rng = np.random.RandomState(seed)
         n_sentences = len(self) if n_sentences == -1 else n_sentences
         n_sentences = min(len(self), n_sentences)
@@ -640,8 +640,8 @@ class ParallelDataset(Dataset):
             rng.shuffle(batches)
 
         # sanity checks
-        assert n_sentences == sum([len(x) for x in batches])
-        assert lengths[indices].sum() == sum([lengths[x].sum() for x in batches])
+        assert n_sentences == sum(len(x) for x in batches)
+        assert lengths[indices].sum() == sum(lengths[x].sum() for x in batches)
         # assert set.union(*[set(x.tolist()) for x in batches]) == set(range(n_sentences))  # slow
 
         # return the iterator

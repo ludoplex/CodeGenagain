@@ -24,7 +24,7 @@ class LogFormatter:
         )
         message = record.getMessage()
         message = message.replace("\n", "\n" + " " * (len(prefix) + 3))
-        return "%s - %s" % (prefix, message) if message else ""
+        return f"{prefix} - {message}" if message else ""
 
 
 def create_logger(filepath, rank):

@@ -28,7 +28,7 @@ class PythonProcessor(LangProcessor):
             "STOKEN3": "'''",
         }
         self.char2spetoken = {
-            value: " " + key + " " for key, value in self.spetoken2char.items()
+            value: f" {key} " for key, value in self.spetoken2char.items()
         }
 
     @property
@@ -50,19 +50,14 @@ class PythonProcessor(LangProcessor):
         while True:
             try:
                 toktype, tok, _, _, line = next(iterator)
-            except (
-                tokenize.TokenError,
-                IndentationError,
-                SyntaxError,
-                UnicodeDecodeError,
-            ) as e:
+            except (tokenize.TokenError, SyntaxError, UnicodeDecodeError) as e:
                 raise ValueError(
                     f'Impossible to parse tokens because of incorrect source code "{e}" ...'
                 )
             except StopIteration:
-                raise StopIteration(f"End of iterator before ENDMARKER token.")
+                raise StopIteration("End of iterator before ENDMARKER token.")
 
-            if toktype == tokenize.ENCODING or toktype == tokenize.NL:
+            if toktype in [tokenize.ENCODING, tokenize.NL]:
                 continue
 
             elif toktype == tokenize.NEWLINE:
@@ -72,19 +67,18 @@ class PythonProcessor(LangProcessor):
                 tokens.append(NEWLINE_TOK)
 
             elif toktype == tokenize.COMMENT:
-                if keep_comments:
-                    com = process_string(
-                        tok,
-                        self.char2spetoken,
-                        self.spetoken2char,
-                        True,
-                        do_whole_processing=process_strings,
-                    )
-                    if len(com) > 0:
-                        tokens.append(com)
-                else:
+                if not keep_comments:
                     continue
 
+                com = process_string(
+                    tok,
+                    self.char2spetoken,
+                    self.spetoken2char,
+                    True,
+                    do_whole_processing=process_strings,
+                )
+                if len(com) > 0:
+                    tokens.append(com)
             elif toktype == tokenize.STRING:
                 if tok == line.strip():  # docstring
                     if not keep_comments:
@@ -136,7 +130,7 @@ class PythonProcessor(LangProcessor):
     def detokenize_code(self, code):
         # replace recreate lines with \n and appropriate indent / dedent
         # removing indent/ dedent tokens
-        assert isinstance(code, str) or isinstance(code, list)
+        assert isinstance(code, (str, list))
         if isinstance(code, list):
             code = " ".join(code)
         code = code.replace("ENDCOM", NEWLINE_TOK)
@@ -165,7 +159,7 @@ class PythonProcessor(LangProcessor):
             for toktype, tok, _, _, line in tokenize.tokenize(
                 BytesIO(untok_s.encode("utf-8")).readline
             ):
-                if toktype == tokenize.STRING or toktype == tokenize.COMMENT:
+                if toktype in [tokenize.STRING, tokenize.COMMENT]:
                     tok_ = (
                         tok.replace("STRNEWLINE", "\n")
                         .replace("TABSYMBOL", "\t")
@@ -206,10 +200,7 @@ class PythonProcessor(LangProcessor):
             raise ValueError(
                 "Function extraction not available for PythonProcessor and untokenized files. Please use PythonTreeSitterProcessor"
             )
-        if isinstance(code, str):
-            tokenized_code = code.split()
-        else:
-            tokenized_code = code
+        tokenized_code = code.split() if isinstance(code, str) else code
         assert isinstance(tokenized_code, list)
 
         tokens = iter(tokenized_code)
@@ -224,7 +215,7 @@ class PythonProcessor(LangProcessor):
             try:
                 if token == "def":
                     function = ["def"]
-                    while not (token == "DEDENT" and number_indent == 0):
+                    while token != "DEDENT" or number_indent != 0:
                         token = next(tokens)
                         if token == "INDENT":
                             number_indent += 1
@@ -252,7 +243,7 @@ class PythonProcessor(LangProcessor):
         return functions_standalone, functions_class
 
     def get_function_name(self, function):
-        assert isinstance(function, str) or isinstance(function, list)
+        assert isinstance(function, (str, list))
         if isinstance(function, str):
             function = function.split()
         return function[function.index("def") + 1]
@@ -264,20 +255,17 @@ class PythonProcessor(LangProcessor):
 
 
 def is_python_2(code: str) -> bool:
-    if (
-        re.search("print [^(]", code) is None
-        and re.search("raise \w+ ,", code) is None
-        and re.search("except \w+ ,", code) is None
-        and re.search("[^ ]+ = \d+ L", code) is None
-        and re.search(".[ ]*iterkeys[ ]*\([ ]*\)", code) is None
-        and re.search(".[ ]*itervalues[ ]*\([ ]*\)", code) is None
-        and re.search(".[ ]*iteritems[ ]*\([ ]*\)", code) is None
-        and re.search("xrange[ ]*\(", code) is None
-        and re.search("imap[ ]*\(", code) is None
-    ):
-        return False
-    else:
-        return True
+    return (
+        re.search("print [^(]", code) is not None
+        or re.search("raise \w+ ,", code) is not None
+        or re.search("except \w+ ,", code) is not None
+        or re.search("[^ ]+ = \d+ L", code) is not None
+        or re.search(".[ ]*iterkeys[ ]*\([ ]*\)", code) is not None
+        or re.search(".[ ]*itervalues[ ]*\([ ]*\)", code) is not None
+        or re.search(".[ ]*iteritems[ ]*\([ ]*\)", code) is not None
+        or re.search("xrange[ ]*\(", code) is not None
+        or re.search("imap[ ]*\(", code) is not None
+    )
 
 
 def apply_black(code: str, line_length: int = 88):

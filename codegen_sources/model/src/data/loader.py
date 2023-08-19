@@ -103,7 +103,7 @@ def load_binarized(path, params):
     if not os.path.isfile(path):
         path = "%s.%i.pth" % (path[:-4], 0)
     assert os.path.isfile(path), path
-    logger.info("Loading data from %s ..." % path)
+    logger.info(f"Loading data from {path} ...")
     data = torch.load(path)
     data = process_binarized(data, params)
     return data
@@ -151,7 +151,7 @@ def load_mono_data(params, data):
 
     for lang in params.mono_dataset.keys():
 
-        logger.info("============ Monolingual data (%s)" % lang)
+        logger.info(f"============ Monolingual data ({lang})")
 
         assert lang in params.langs and lang not in data["mono"]
         data["mono"][lang] = {}
@@ -216,8 +216,8 @@ def load_mono_data(params, data):
                 dataset.remove_long_sentences(params.max_len)
                 if splt == SELF_TRAINED:
                     dataset.compute_st_scores(params, data["dico"])
-                    data[f"java_st_unit_tests"] = dataset.unit_tests
-                    data[f"java_st_tests_scores"] = dataset.st_tests_scores
+                    data["java_st_unit_tests"] = dataset.unit_tests
+                    data["java_st_tests_scores"] = dataset.st_tests_scores
 
                 # if there are several processes on the same machine, we can split the dataset
                 if (
@@ -260,9 +260,9 @@ def load_para_data(params, data):
         else:
             src, tgt, span = key
         if span is None:
-            logger.info("============ Parallel data (%s-%s)" % (src, tgt))
+            logger.info(f"============ Parallel data ({src}-{tgt})")
         else:
-            logger.info("============ Parallel data (%s/%s-%s)" % (src, span, tgt))
+            logger.info(f"============ Parallel data ({src}/{span}-{tgt})")
 
         assert key not in data["para"]
         data["para"][key] = {}

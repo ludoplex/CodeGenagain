@@ -64,9 +64,13 @@ MODEL_CLASSES = {
 
 
 def load_and_cache_examples(args, tokenizer, evaluate=False):
-    dataset = concodeDataset(tokenizer, args, logger, file_type='dev' if evaluate else 'train',
-                          block_size=args.block_size)
-    return dataset
+    return concodeDataset(
+        tokenizer,
+        args,
+        logger,
+        file_type='dev' if evaluate else 'train',
+        block_size=args.block_size,
+    )
 
 
 def set_seed(args):
@@ -90,10 +94,10 @@ def train(args, train_dataset, model, tokenizer, fh, pool):
         if not os.path.exists(args.tensorboard_dir):
             os.makedirs(args.tensorboard_dir)
         tb_writer = SummaryWriter(args.tensorboard_dir)
-    
+
     args.batch_size = args.per_gpu_train_batch_size * max(1, args.n_gpu)
     train_sampler = RandomSampler(train_dataset)
-    
+
     train_dataloader = DataLoader(train_dataset, sampler=train_sampler, batch_size=args.batch_size, drop_last=True)
     total_examples = len(train_dataset) * (
                     torch.distributed.get_world_size() if args.local_rank != -1 else 1)
@@ -107,13 +111,26 @@ def train(args, train_dataset, model, tokenizer, fh, pool):
     args.max_steps = t_total
     model.to(args.device)
     if args.local_rank not in [-1, 0]:
-        torch.distributed.barrier()  
+        torch.distributed.barrier()
     # Prepare optimizer and schedule (linear warmup and decay)
     no_decay = ['bias', 'LayerNorm.weight']
     optimizer_grouped_parameters = [
-        {'params': [p for n, p in model.named_parameters() if not any(nd in n for nd in no_decay)],
-         'weight_decay': args.weight_decay},
-        {'params': [p for n, p in model.named_parameters() if any(nd in n for nd in no_decay)], 'weight_decay': 0.0}
+        {
+            'params': [
+                p
+                for n, p in model.named_parameters()
+                if all(nd not in n for nd in no_decay)
+            ],
+            'weight_decay': args.weight_decay,
+        },
+        {
+            'params': [
+                p
+                for n, p in model.named_parameters()
+                if any(nd in n for nd in no_decay)
+            ],
+            'weight_decay': 0.0,
+        },
     ]
     optimizer = AdamW(optimizer_grouped_parameters, lr=args.learning_rate, eps=args.adam_epsilon)
     scheduler = get_linear_schedule_with_warmup(optimizer, num_warmup_steps=args.warmup_steps,
@@ -124,9 +141,9 @@ def train(args, train_dataset, model, tokenizer, fh, pool):
     if os.path.exists(scheduler_last):
         scheduler.load_state_dict(torch.load(scheduler_last, map_location="cpu"))
     if os.path.exists(optimizer_last):
-        optimizer.load_state_dict(torch.load(optimizer_last, map_location="cpu"))   
+        optimizer.load_state_dict(torch.load(optimizer_last, map_location="cpu"))
     if args.local_rank == 0:
-        torch.distributed.barrier()   
+        torch.distributed.barrier()
     if args.fp16:
         try:
             from apex import amp
@@ -152,7 +169,7 @@ def train(args, train_dataset, model, tokenizer, fh, pool):
     logger.info("  Total train batch size (w. parallel, distributed & accumulation) = %d", batch_size)
     logger.info("  Gradient Accumulation steps = %d", args.gradient_accumulation_steps)
     logger.info("  Total optimization steps = %d", t_total)
-    
+
     global_step = args.start_step
     tr_loss, logging_loss,avg_loss,tr_nb = 0.0, 0.0,0.0,0
     # model.resize_token_embeddings(len(tokenizer))
@@ -160,8 +177,8 @@ def train(args, train_dataset, model, tokenizer, fh, pool):
     set_seed(args)  # Added here for reproducibility (even between python 2 and 3)
 
     best_bleu = 0.0
- 
-    for idx in range(args.start_epoch, int(args.num_train_epochs)): 
+
+    for _ in range(args.start_epoch, int(args.num_train_epochs)):
         for step, (batch, token_labels) in enumerate(train_dataloader):
             inputs = batch.to(args.device)
             attn_mask = torch.tensor(token_labels.clone().detach() != 0, dtype=torch.uint8, device=args.device)
@@ -194,11 +211,11 @@ def train(args, train_dataset, model, tokenizer, fh, pool):
                 torch.nn.utils.clip_grad_norm_(model.parameters(), args.max_grad_norm)
 
             tr_loss += loss.item()
-                
+
             if (step + 1) % args.gradient_accumulation_steps == 0:
                 optimizer.step()
                 optimizer.zero_grad()
-                scheduler.step()  
+                scheduler.step()
                 global_step += 1
                 output_flag=True
                 avg_loss=round(np.exp((tr_loss - logging_loss) /(global_step- tr_nb)),4)
@@ -222,13 +239,19 @@ def train(args, train_dataset, model, tokenizer, fh, pool):
                         # output_dir = os.path.join(args.output_dir, '{}-{}-{}'.format(checkpoint_prefix, global_step, round(results['perplexity'],4)))
                         dev_bleu, dev_EM = eval_bleu(args, model, tokenizer, file_type='dev', num=100)
                         logger.info(f"dev bleu: {dev_bleu}, dev EM: {dev_EM}")
-                        output_dir = os.path.join(args.output_dir, '{}-{}-{}'.format(checkpoint_prefix, global_step, round(dev_bleu,2)))
+                        output_dir = os.path.join(
+                            args.output_dir,
+                            f'{checkpoint_prefix}-{global_step}-{round(dev_bleu, 2)}',
+                        )
                         if dev_bleu > best_bleu:
                             best_bleu = dev_bleu
                             logger.info(f"best bleu updated. saved in {output_dir}")
                             logger.info(f"best bleu: {best_bleu}")
                     else:
-                        output_dir = os.path.join(args.output_dir, "{}-{}".format(checkpoint_prefix, global_step))
+                        output_dir = os.path.join(
+                            args.output_dir,
+                            f"{checkpoint_prefix}-{global_step}",
+                        )
                     if not os.path.exists(output_dir):
                         os.makedirs(output_dir)
                     model_to_save = (
@@ -258,10 +281,10 @@ def train(args, train_dataset, model, tokenizer, fh, pool):
                     with open(step_file, 'w', encoding='utf-8') as stepf:
                         stepf.write(str(global_step) + '\n')
 
-                    # torch.save(optimizer.state_dict(), os.path.join(output_dir, "optimizer.pt"))
-                    # torch.save(scheduler.state_dict(), os.path.join(output_dir, "scheduler.pt"))
-                    # logger.info("Saving optimizer and scheduler states to %s", output_dir)
-                    
+                                    # torch.save(optimizer.state_dict(), os.path.join(output_dir, "optimizer.pt"))
+                                    # torch.save(scheduler.state_dict(), os.path.join(output_dir, "scheduler.pt"))
+                                    # logger.info("Saving optimizer and scheduler states to %s", output_dir)
+                                    
 
             if args.max_steps > 0 and global_step > args.max_steps:
                 break
@@ -299,8 +322,8 @@ def evaluate(args, model, tokenizer, prefix="", eval_when_training=False):
     eval_loss = 0.0
     nb_eval_steps = 0
     model.eval()
-    
-    for step, (batch, token_labels) in enumerate(eval_dataloader):
+
+    for batch, token_labels in eval_dataloader:
         inputs = batch.to(args.device)
         attn_mask = torch.tensor(token_labels.clone().detach() != 0, dtype=torch.uint8, device=args.device)
         loss_mask = torch.tensor(token_labels.clone().detach() == 2, dtype=torch.uint8, device=args.device)
@@ -505,15 +528,15 @@ def main():
     parser.add_argument("--local_rank", type=int, default=-1,
                         help="For distributed training: local_rank")
     parser.add_argument("--node_index", type=int, default=-1,
-                        help="node index if multi-node running")    
+                        help="node index if multi-node running")
     parser.add_argument("--gpu_per_node", type=int, default=-1,
-                        help="num of gpus per node")  
+                        help="num of gpus per node")
     parser.add_argument('--server_ip', type=str, default='', help="For distant debugging.")
     parser.add_argument('--server_port', type=str, default='', help="For distant debugging.")
 
     parser.add_argument('--log_file', type=str, default='')
     parser.add_argument('--tensorboard_dir', type=str)  
-    
+
     pool = None
     args = parser.parse_args()
 
@@ -526,8 +549,8 @@ def main():
     if os.path.exists(args.output_dir) and os.listdir(
             args.output_dir) and args.do_train and not args.overwrite_output_dir:
         raise ValueError(
-            "Output directory ({}) already exists and is not empty. Use --overwrite_output_dir to overcome.".format(
-                args.output_dir))
+            f"Output directory ({args.output_dir}) already exists and is not empty. Use --overwrite_output_dir to overcome."
+        )
 
     # Setup distant debugging if needed
     if args.server_ip and args.server_port:
@@ -555,9 +578,15 @@ def main():
     logging.basicConfig(format='%(asctime)s - %(levelname)s - %(name)s -   %(message)s',
                         datefmt='%m/%d/%Y %H:%M:%S',
                         level=logging.INFO if args.local_rank in [-1, 0] else logging.WARN)
-    logger.warning("Process rank: %s, device: %s, n_gpu: %s, distributed training: %s, 16-bits training: %s, world size: %s",
-                   args.local_rank, device, args.n_gpu, bool(args.local_rank != -1), args.fp16,
-                   torch.distributed.get_world_size() if args.local_rank != -1 else 1)
+    logger.warning(
+        "Process rank: %s, device: %s, n_gpu: %s, distributed training: %s, 16-bits training: %s, world size: %s",
+        args.local_rank,
+        device,
+        args.n_gpu,
+        args.local_rank != -1,
+        args.fp16,
+        torch.distributed.get_world_size() if args.local_rank != -1 else 1,
+    )
 
     # 使用FileHandler输出到文件
     fh = logging.FileHandler(args.log_file)
@@ -585,12 +614,13 @@ def main():
             with open(step_file, encoding='utf-8') as stepf:
                 args.start_step = int(stepf.readlines()[0].strip())
 
-        logger.info("reload model from {}, resume from {} epoch".format(checkpoint_last, args.start_epoch))
+        logger.info(
+            f"reload model from {checkpoint_last}, resume from {args.start_epoch} epoch"
+        )
 
     # Load pre-trained model
     config_class, model_class, tokenizer_class = MODEL_CLASSES[args.model_type]
-    pretrained = args.pretrain_dir
-    if pretrained:
+    if pretrained := args.pretrain_dir:
         tokenizer = tokenizer_class.from_pretrained(pretrained, do_lower_case=args.do_lower_case, bos_token='<s>', eos_token='</s>', pad_token='<pad>', unk_token='<|UNKNOWN|>', sep_token='concode_elem_sep')
         logger.info(tokenizer.encode("<s> hello world <pad> </s>"))
         model = model_class.from_pretrained(pretrained)
@@ -606,7 +636,7 @@ def main():
         update_config(model, tokenizer)
 
     model_parameters = model.parameters()
-    num_params = sum([np.prod(p.size()) for p in model_parameters])
+    num_params = sum(np.prod(p.size()) for p in model_parameters)
     logger.info(f"Model has a total of {num_params} trainable parameters")
 
     if args.local_rank == 0:

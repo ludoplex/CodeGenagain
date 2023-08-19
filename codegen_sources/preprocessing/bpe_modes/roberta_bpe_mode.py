@@ -75,7 +75,7 @@ class RobertaBPEMode(BPEMode):
 
     def repair_bpe_for_obfuscation_file(self, file: str, output: str) -> None:
         output_file = open(output, "w", encoding="utf-8")
-        with open(str(file), "r", encoding="utf-8") as input_file:
+        with open(file, "r", encoding="utf-8") as input_file:
             for line in input_file:
                 line = self.repair_bpe_for_obfuscation_line(line)
                 output_file.write(line)

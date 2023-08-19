@@ -107,10 +107,10 @@ class ObfuscationMode(DatasetMode):
         assert all(s in tokenized_data for s in self.suffixes)
         assert len(tokenized_data["dictionary"]) == 1
         assert isinstance(tokenized_data["dictionary"][0], str)
-        for var_prefix, var_number in OUTLIER_INDICES_THRESHOLDS.items():
-            if f"{var_prefix}{var_number}" in tokenized_data["dictionary"][0]:
-                return True
-        return False
+        return any(
+            f"{var_prefix}{var_number}" in tokenized_data["dictionary"][0]
+            for var_prefix, var_number in OUTLIER_INDICES_THRESHOLDS.items()
+        )
 
     def _learn_bpe(
         self, ncodes: int, executor: tp.Optional["ExecutorLike"] = None

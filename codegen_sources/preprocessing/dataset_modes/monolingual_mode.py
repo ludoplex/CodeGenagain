@@ -117,7 +117,7 @@ class MonolingualMode(DatasetMode):
             file_paths=all_shufs,
             subset_size_gb=50,
             output_path=self.folder.joinpath(
-                f"{'-'.join(self.languages)}.{self.suffixes[0]}.tok.shuf.{50}gb"
+                f"{'-'.join(self.languages)}.{self.suffixes[0]}.tok.shuf.50gb"
             ),
         )
 

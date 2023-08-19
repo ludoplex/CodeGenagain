@@ -21,7 +21,7 @@ LTensor = torch.LongTensor
 
 REPO_ROOT = Path(__file__).parents[3].absolute()
 sys.path.append(str(REPO_ROOT))
-print("adding to path", str(REPO_ROOT))
+print("adding to path", REPO_ROOT)
 from codegen_sources.preprocessing.lang_processors import LangProcessor, IRProcessor
 
 

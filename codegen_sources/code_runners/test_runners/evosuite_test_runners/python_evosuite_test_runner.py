@@ -74,9 +74,8 @@ class PythonEvosuiteTestRunner(UnitTestRunner):
         res_line = res_line[-1]
         if res_line.startswith("OK"):
             return "success", number_of_tests, 0
-        else:
-            assert res_line.startswith("FAILED (errors=") or res_line.startswith(
-                "FAILED (failures="
-            )
-            number_failures = int(res_line.split("=")[-1].replace(")", ""))
-            return "failure", number_of_tests, number_failures
+        assert res_line.startswith("FAILED (errors=") or res_line.startswith(
+            "FAILED (failures="
+        )
+        number_failures = int(res_line.split("=")[-1].replace(")", ""))
+        return "failure", number_of_tests, number_failures

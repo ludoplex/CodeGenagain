@@ -94,8 +94,8 @@ class CppProcessor(TreeSitterLangProcessor):
                 and "{" in function
             ):
                 if (
-                    not _in_class or "static" in function[0 : function.index("{")]
-                ) and "::" not in function[0 : function.index("(")]:
+                    not _in_class or "static" in function[: function.index("{")]
+                ) and "::" not in function[: function.index("(")]:
                     standalone_funcs.append(function)
                 else:
                     class_funcs.append(function)

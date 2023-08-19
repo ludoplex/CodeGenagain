@@ -26,7 +26,7 @@ def calculate_scores(answers,predictions):
     scores=[]
     for key in answers:
         if key not in predictions:
-            logging.error("Missing prediction for url {}.".format(key))
+            logging.error(f"Missing prediction for url {key}.")
             sys.exit()
         flag=False
         for rank,idx in enumerate(predictions[key]):
@@ -36,9 +36,7 @@ def calculate_scores(answers,predictions):
                 break
         if flag is False:
             scores.append(0)
-    result={}
-    result['MRR']=round(np.mean(scores),4)
-    return result
+    return {'MRR': round(np.mean(scores), 4)}
 
 def main():
     import argparse

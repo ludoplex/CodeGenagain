@@ -55,5 +55,5 @@ def XLM_preprocess(voc_path, txt_path, bin_path):
 if __name__ == "__main__":
     voc_path_arg = sys.argv[1]
     txt_path_arg = sys.argv[2]
-    bin_path_arg = sys.argv[2] + ".pth"
+    bin_path_arg = f"{sys.argv[2]}.pth"
     XLM_preprocess(voc_path_arg, txt_path_arg, bin_path_arg)

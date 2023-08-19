@@ -23,16 +23,16 @@ class Adam(optim.Optimizer):
     def __init__(
         self, params, lr=1e-3, betas=(0.9, 0.999), eps=1e-8, weight_decay=0
     ) -> None:
-        if not 0.0 <= lr:
-            raise ValueError("Invalid learning rate: {}".format(lr))
-        if not 0.0 <= eps:
-            raise ValueError("Invalid epsilon value: {}".format(eps))
+        if lr < 0.0:
+            raise ValueError(f"Invalid learning rate: {lr}")
+        if eps < 0.0:
+            raise ValueError(f"Invalid epsilon value: {eps}")
         if not 0.0 <= betas[0] < 1.0:
-            raise ValueError("Invalid beta parameter at index 0: {}".format(betas[0]))
+            raise ValueError(f"Invalid beta parameter at index 0: {betas[0]}")
         if not 0.0 <= betas[1] < 1.0:
-            raise ValueError("Invalid beta parameter at index 1: {}".format(betas[1]))
-        if not 0.0 <= weight_decay:
-            raise ValueError("Invalid weight_decay value: {}".format(weight_decay))
+            raise ValueError(f"Invalid beta parameter at index 1: {betas[1]}")
+        if weight_decay < 0.0:
+            raise ValueError(f"Invalid weight_decay value: {weight_decay}")
         defaults = dict(lr=lr, betas=betas, eps=eps, weight_decay=weight_decay)
         super().__init__(params, defaults)
 
@@ -50,10 +50,7 @@ class Adam(optim.Optimizer):
         """
         Step.
         """
-        loss = None
-        if closure is not None:
-            loss = closure()
-
+        loss = closure() if closure is not None else None
         for group in self.param_groups:
             for p in group["params"]:
                 if p.grad is None:
@@ -217,31 +214,30 @@ class AdamCosineWithWarmup(Adam):
     def get_lr_for_step(self, num_updates):
         if num_updates < self.warmup_updates:
             return self.warmup_init_lr + num_updates * self.lr_step
+        t = num_updates - self.warmup_updates
+        if self.period_mult == 1:
+            pid = math.floor(t / self.period)
+            t_i = self.period
+            t_curr = t - (self.period * pid)
         else:
-            t = num_updates - self.warmup_updates
-            if self.period_mult == 1:
-                pid = math.floor(t / self.period)
-                t_i = self.period
-                t_curr = t - (self.period * pid)
-            else:
-                pid = math.floor(
-                    math.log(
-                        1 - t / self.period * (1 - self.period_mult), self.period_mult
-                    )
+            pid = math.floor(
+                math.log(
+                    1 - t / self.period * (1 - self.period_mult), self.period_mult
                 )
-                t_i = self.period * (self.period_mult ** pid)
-                t_curr = (
-                    t
-                    - (1 - self.period_mult ** pid)
-                    / (1 - self.period_mult)
-                    * self.period
-                )
-            lr_shrink = self.lr_shrink ** pid
-            min_lr = self.min_lr * lr_shrink
-            max_lr = self.max_lr * lr_shrink
-            return min_lr + 0.5 * (max_lr - min_lr) * (
-                1 + math.cos(math.pi * t_curr / t_i)
             )
+            t_i = self.period * (self.period_mult ** pid)
+            t_curr = (
+                t
+                - (1 - self.period_mult ** pid)
+                / (1 - self.period_mult)
+                * self.period
+            )
+        lr_shrink = self.lr_shrink ** pid
+        min_lr = self.min_lr * lr_shrink
+        max_lr = self.max_lr * lr_shrink
+        return min_lr + 0.5 * (max_lr - min_lr) * (
+            1 + math.cos(math.pi * t_curr / t_i)
+        )
 
     def step(self, closure=None):
         super().step(closure)
@@ -257,9 +253,9 @@ def get_optimizer(parameters, s):
         - "sgd,lr=0.01"
         - "adagrad,lr=0.1,lr_decay=0.05"
     """
+    optim_params = {}
     if "," in s:
         method = s[: s.find(",")]
-        optim_params = {}
         for x in s[s.find(",") + 1 :].split(","):
             split = x.split("=")
             assert len(split) == 2
@@ -267,8 +263,6 @@ def get_optimizer(parameters, s):
             optim_params[split[0]] = float(split[1])
     else:
         method = s
-        optim_params = {}
-
     if method == "adadelta":
         optim_fn = optim.Adadelta
     elif method == "adagrad":
@@ -309,15 +303,14 @@ def get_optimizer(parameters, s):
         optim_fn = optim.SGD
         assert "lr" in optim_params
     else:
-        raise Exception('Unknown optimization method: "%s"' % method)
+        raise Exception(f'Unknown optimization method: "{method}"')
 
     # check that we give good parameters to the optimizer
     expected_args = inspect.getargspec(optim_fn.__init__)[0]
     assert expected_args[:2] == ["self", "params"]
-    if not all(k in expected_args[2:] for k in optim_params.keys()):
+    if any(k not in expected_args[2:] for k in optim_params):
         raise Exception(
-            'Unexpected parameters: expected "%s", got "%s"'
-            % (str(expected_args[2:]), str(optim_params.keys()))
+            f'Unexpected parameters: expected "{str(expected_args[2:])}", got "{str(optim_params.keys())}"'
         )
 
     return optim_fn(parameters, **optim_params)

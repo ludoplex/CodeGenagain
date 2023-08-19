@@ -52,7 +52,7 @@ JAVA_TOKEN2CHAR: tp.Dict[str, str] = {
     "STOKEN13": r"\\",
 }
 JAVA_CHAR2TOKEN: tp.Dict[str, str] = {
-    value: " " + key + " " for key, value in JAVA_TOKEN2CHAR.items()
+    value: f" {key} " for key, value in JAVA_TOKEN2CHAR.items()
 }
 
 
@@ -89,7 +89,7 @@ class JavaProcessor(TreeSitterLangProcessor):
             # There can be some issues where "{" is not in the function string.
             # In that case, it is not a proper function
             if "{" in function:
-                if "static" in function[0 : function.index("{")]:
+                if "static" in function[: function.index("{")]:
                     standalone_funcs.append(function)
                 else:
                     class_funcs.append(function)
@@ -177,9 +177,9 @@ def get_java_compilation_errors(code, timeout=20):
 
 def write_java_function(f: str, out_path: Path = Path("/tmp/java_functions/")) -> Path:
     rand_folder = str(random.getrandbits(64))
-    classname = f"JAVA_FUNC"
+    classname = "JAVA_FUNC"
     tmp_folder = out_path.joinpath(f"tmp_folder_{rand_folder}")
-    out_file = tmp_folder.joinpath(classname + ".java")
+    out_file = tmp_folder.joinpath(f"{classname}.java")
     tmp_folder.mkdir(parents=True, exist_ok=True)
     java_processor = JavaProcessor()
 
@@ -192,7 +192,7 @@ import java.lang.*;
 import javafx.util.Pair;
 """
         )
-        writefile.write("public class " + classname + "{\n")
+        writefile.write(f"public class {classname}" + "{\n")
         code = f.replace("\r", "")
         writefile.write(java_processor.detokenize_code(code))
         writefile.write("}\n")
